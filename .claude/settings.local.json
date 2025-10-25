@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dotnet build:*)",
+      "Bash(curl:*)",
+      "Bash(python:*)",
+      "Bash(powershell -Command \"$body = @{queryType=''getdocument''; filePath=''C:\\Users\\AJ\\Desktop\\PepLib\\PepLib\\Program.cs''} | ConvertTo-Json; Invoke-RestMethod -Uri ''http://localhost:59123/query'' -Method Post -Body $body -ContentType ''application/json'' | ConvertTo-Json -Depth 10\")",
+      "Bash(powershell -Command:*)",
+      "Bash(ls:*)",
+      "Bash(mkdir:*)",
+      "Skill(roslyn-api)",
+      "Bash(move:*)",
+      "Bash(tree:*)",
+      "Bash(dir:*)",
+      "Bash(git config:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
