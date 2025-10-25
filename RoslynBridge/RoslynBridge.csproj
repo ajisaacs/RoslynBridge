@@ -78,6 +78,7 @@
     <Compile Include="Services\DocumentQueryService.cs" />
     <Compile Include="Services\IRoslynQueryService.cs" />
     <Compile Include="Services\IWorkspaceProvider.cs" />
+    <Compile Include="Services\ProjectOperationsService.cs" />
     <Compile Include="Services\RefactoringService.cs" />
     <Compile Include="Services\RoslynQueryService.cs" />
     <Compile Include="Services\SymbolQueryService.cs" />
@@ -98,9 +99,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.VisualStudio.SDK" Version="17.8.37221" ExcludeAssets="runtime">
-      <IncludeAssets>compile; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-    </PackageReference>
+    <PackageReference Include="Microsoft.VisualStudio.SDK" Version="17.8.37221" />
     <PackageReference Include="Microsoft.VSSDK.BuildTools" Version="17.8.2369">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
@@ -119,7 +118,7 @@
     <PackageReference Include="Microsoft.VisualStudio.Threading" Version="17.8.14" />
 
     <!-- HTTP server -->
-    <PackageReference Include="System.Text.Json" Version="8.0.0" />
+    <PackageReference Include="System.Text.Json" Version="8.0.5" />
   </ItemGroup>
 
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

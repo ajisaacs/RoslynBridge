@@ -12,7 +12,15 @@
       "Bash(move:*)",
       "Bash(tree:*)",
       "Bash(dir:*)",
-      "Bash(git config:*)"
+      "Bash(git config:*)",
+      "Bash(del \"C:\\Users\\AJ\\Desktop\\RoslynBridge\\RoslynBridge\\Services\\ShellService.cs\")",
+      "Skill(roslyn-bridge)",
+      "Bash(dotnet restore:*)",
+      "Bash(msbuild:*)",
+      "Bash(\"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\MSBuild\\Current\\Bin\\MSBuild.exe\" /t:Restore,Build /p:Configuration=Debug)",
+      "Bash(\"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\MSBuild\\Current\\Bin\\MSBuild.exe\" RoslynBridge.sln /t:Restore /t:Build /p:Configuration=Debug)",
+      "Bash(del \".claude\\init.md\")",
+      "Bash(git add:*)"
     ],
     "deny": [],
     "ask": []

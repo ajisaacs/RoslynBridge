@@ -39,5 +39,13 @@ namespace RoslynBridge.Constants
         public const string RenameSymbol = "renamesymbol";
         public const string OrganizeUsings = "organizeusings";
         public const string AddMissingUsing = "addmissingusing";
+
+        // Project operation endpoints
+        public const string AddNuGetPackage = "addnugetpackage";
+        public const string RemoveNuGetPackage = "removenugetpackage";
+        public const string BuildProject = "buildproject";
+        public const string CleanProject = "cleanproject";
+        public const string RestorePackages = "restorepackages";
+        public const string CreateDirectory = "createdirectory";
     }
 }

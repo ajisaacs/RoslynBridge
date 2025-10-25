@@ -6,7 +6,11 @@
  - Claude skills: `.claude/skills/roslyn-api/SKILL.md` (HTTP query reference for local discovery/testing).
 
  ## Build, Test, and Development Commands
- - Build (CLI): `msbuild RoslynBridge.sln /p:Configuration=Debug`
+ - **IMPORTANT**: This VSIX project MUST be built with MSBuild, NOT `dotnet build`. Using `dotnet build` will fail with missing namespace errors.
+- Build (CLI): `msbuild RoslynBridge.sln /p:Configuration=Debug` or with full path:
+  ```powershell
+  & 'C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe' RoslynBridge.sln /t:Restore /t:Build /p:Configuration=Debug
+  ```
  - Build (VS): Open `RoslynBridge.sln`, set `RoslynBridge` as startup, press F5 to launch the Experimental Instance.
  - Health check (server running in VS):
    - PowerShell: `$b=@{queryType='getprojects'}|ConvertTo-Json; Invoke-RestMethod -Uri 'http://localhost:59123/query' -Method Post -Body $b -ContentType 'application/json'`

@@ -10,6 +10,13 @@ namespace RoslynBridge.Models
         public int? Line { get; set; }
         public int? Column { get; set; }
         public Dictionary<string, string>? Parameters { get; set; }
+
+        // Project operation parameters
+        public string? ProjectName { get; set; }
+        public string? PackageName { get; set; }
+        public string? Version { get; set; }
+        public string? Configuration { get; set; }
+        public string? DirectoryPath { get; set; }
     }
 
     public class QueryResponse

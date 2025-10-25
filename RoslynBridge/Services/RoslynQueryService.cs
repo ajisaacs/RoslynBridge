@@ -17,6 +17,7 @@ namespace RoslynBridge.Services
         private readonly DocumentQueryService _documentService;
         private readonly DiagnosticsService _diagnosticsService;
         private readonly RefactoringService _refactoringService;
+        private readonly ProjectOperationsService _projectOperationsService;
 
         public RoslynQueryService(AsyncPackage package)
         {
@@ -28,6 +29,7 @@ namespace RoslynBridge.Services
             _documentService = new DocumentQueryService(package, _workspaceProvider);
             _diagnosticsService = new DiagnosticsService(package, _workspaceProvider);
             _refactoringService = new RefactoringService(package, _workspaceProvider);
+            _projectOperationsService = new ProjectOperationsService(_workspaceProvider);
         }
 
         public async Task InitializeAsync()
@@ -39,6 +41,25 @@ namespace RoslynBridge.Services
         {
             try
             {
+                // Handle project operations (don't require workspace)
+                var queryType = request.QueryType?.ToLowerInvariant();
+                switch (queryType)
+                {
+                    case QueryTypes.AddNuGetPackage:
+                        return await _projectOperationsService.AddNuGetPackageAsync(request.ProjectName ?? string.Empty, request.PackageName ?? string.Empty, request.Version);
+                    case QueryTypes.RemoveNuGetPackage:
+                        return await _projectOperationsService.RemoveNuGetPackageAsync(request.ProjectName ?? string.Empty, request.PackageName ?? string.Empty);
+                    case QueryTypes.BuildProject:
+                        return await _projectOperationsService.BuildAsync(request.ProjectName ?? string.Empty, request.Configuration);
+                    case QueryTypes.CleanProject:
+                        return await _projectOperationsService.CleanAsync(request.ProjectName ?? string.Empty);
+                    case QueryTypes.RestorePackages:
+                        return await _projectOperationsService.RestoreAsync(request.ProjectName ?? string.Empty);
+                    case QueryTypes.CreateDirectory:
+                        return await _projectOperationsService.CreateDirectoryAsync(request.DirectoryPath ?? string.Empty);
+                }
+
+                // For Roslyn queries, ensure workspace is initialized
                 if (_workspaceProvider.Workspace == null)
                 {
                     await InitializeAsync();
