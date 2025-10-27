@@ -18,12 +18,14 @@ namespace RoslynBridge.Server
         private readonly AsyncPackage _package;
         private readonly IRoslynQueryService _queryService;
         private bool _isRunning;
-        private readonly int _port;
+        private int _port;
 
-        public BridgeServer(AsyncPackage package, int port = ServerConstants.DefaultPort)
+        public int Port => _port;
+
+        public BridgeServer(AsyncPackage package, int? startPort = null)
         {
             _package = package;
-            _port = port;
+            _port = startPort ?? ConfigurationService.Instance.DefaultPort;
             _queryService = new RoslynQueryService(package);
         }
 
@@ -38,12 +40,36 @@ namespace RoslynBridge.Server
             {
                 await _queryService.InitializeAsync();
 
-                _listener = new HttpListener();
-                _listener.Prefixes.Add(ServerConstants.GetServerUrl(_port));
-                _listener.Start();
-                _isRunning = true;
+                // Try to find an available port
+                int maxPort = _port + ConfigurationService.Instance.MaxPortRange;
+                bool started = false;
 
-                System.Diagnostics.Debug.WriteLine($"Roslyn Bridge HTTP server started on port {_port}");
+                for (int port = _port; port < maxPort; port++)
+                {
+                    try
+                    {
+                        _listener = new HttpListener();
+                        _listener.Prefixes.Add(ServerConstants.GetServerUrl(port));
+                        _listener.Start();
+                        _port = port; // Update to the port that worked
+                        started = true;
+                        System.Diagnostics.Debug.WriteLine($"Roslyn Bridge HTTP server started on port {_port}");
+                        break;
+                    }
+                    catch (HttpListenerException)
+                    {
+                        // Port is in use, try next one
+                        _listener?.Close();
+                        _listener = null;
+                    }
+                }
+
+                if (!started)
+                {
+                    throw new Exception($"Could not find available port in range {_port}-{maxPort}");
+                }
+
+                _isRunning = true;
 
                 // Start listening for requests in the background
 #pragma warning disable CS4014
@@ -95,6 +121,8 @@ namespace RoslynBridge.Server
                     return;
                 }
 
+                var path = context.Request.Url?.AbsolutePath ?? "/";
+
                 if (context.Request.HttpMethod != "POST")
                 {
                     await RespondWithError(response, 405, "Only POST requests are supported");
@@ -110,7 +138,7 @@ namespace RoslynBridge.Server
                 }
 
                 // Route request
-                var queryResponse = await RouteRequestAsync(context.Request.Url?.AbsolutePath ?? "/", request);
+                var queryResponse = await RouteRequestAsync(path, request);
                 response.StatusCode = queryResponse.Success ? 200 : 400;
                 await WriteResponseAsync(response, queryResponse);
             }
@@ -193,6 +221,22 @@ namespace RoslynBridge.Server
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Error writing response: {ex}");
+            }
+        }
+
+        private static async Task WriteRawResponseAsync(HttpListenerResponse response, string contentType, string content)
+        {
+            try
+            {
+                response.ContentType = contentType;
+                var buffer = Encoding.UTF8.GetBytes(content);
+                response.ContentLength64 = buffer.Length;
+                await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+                response.Close();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error writing raw response: {ex}");
             }
         }
 
