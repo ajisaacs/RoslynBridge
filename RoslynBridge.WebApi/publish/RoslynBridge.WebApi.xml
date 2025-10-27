@@ -1,0 +1,576 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>RoslynBridge.WebApi</name>
+    </assembly>
+    <members>
+        <member name="T:RoslynBridge.WebApi.Controllers.HealthController">
+            <summary>
+            Health check and status controller
+            </summary>
+        </member>
+        <member name="M:RoslynBridge.WebApi.Controllers.HealthController.GetHealth(System.Threading.CancellationToken)">
+            <summary>
+            Get the health status of the middleware and Visual Studio plugin
+            </summary>
+            <param name="cancellationToken">Cancellation token</param>
+            <returns>Health status information</returns>
+            <response code="200">Service is healthy</response>
+            <response code="503">Service is unhealthy</response>
+        </member>
+        <member name="M:RoslynBridge.WebApi.Controllers.HealthController.Ping">
+            <summary>
+            Simple ping endpoint
+            </summary>
+            <returns>Pong response</returns>
+        </member>
+        <member name="T:RoslynBridge.WebApi.Controllers.HistoryController">
+            <summary>
+            Controller for accessing query history
+            </summary>
+        </member>
+        <member name="M:RoslynBridge.WebApi.Controllers.HistoryController.GetAll">
+            <summary>
+            Get all history entries
+            </summary>
+            <returns>List of all history entries</returns>
+            <response code="200">Returns the list of history entries</response>
+        </member>
+        <member name="M:RoslynBridge.WebApi.Controllers.HistoryController.GetById(System.String)">
+            <summary>
+            Get a specific history entry by ID
+            </summary>
+            <param name="id">The history entry ID</param>
+            <returns>The history entry</returns>
+            <response code="200">Returns the history entry</response>
+            <response code="404">Entry not found</response>
+        </member>
+        <member name="M:RoslynBridge.WebApi.Controllers.HistoryController.GetRecent(System.Int32)">
+            <summary>
+            Get recent history entries
+            </summary>
+            <param name="count">Number of entries to return (default: 50, max: 500)</param>
+            <returns>List of recent history entries</returns>
+            <response code="200">Returns the list of recent entries</response>
+        </member>
+        <member name="M:RoslynBridge.WebApi.Controllers.HistoryController.GetStats">
+            <summary>
+            Get history statistics
+            </summary>
+            <returns>Statistics about history entries</returns>
+        </member>
+        <member name="M:RoslynBridge.WebApi.Controllers.HistoryController.Clear">
+            <summary>
+            Clear all history entries
+            </summary>
+            <returns>Confirmation message</returns>
+            <response code="200">History cleared successfully</response>
+        </member>
+        <member name="T:RoslynBridge.WebApi.Controllers.InstancesController">
+            <summary>
+            Controller for managing Visual Studio instance registrations
+            </summary>
+        </member>
+        <member name="M:RoslynBridge.WebApi.Controllers.InstancesController.Register(RoslynBridge.WebApi.Models.VSInstanceInfo)">
+            <summary>
+            Register a new Visual Studio instance
+            </summary>
+            <param name="instance">Instance information</param>
+            <returns>Registration result</returns>
+        </member>
+        <member name="M:RoslynBridge.WebApi.Controllers.InstancesController.Unregister(System.Int32)">
+            <summary>
+            Unregister a Visual Studio instance
+            </summary>
+            <param name="processId">Process ID of the instance to unregister</param>
+            <returns>Unregistration result</returns>
+        </member>
+        <member name="M:RoslynBridge.WebApi.Controllers.InstancesController.Heartbeat(System.Int32)">
+            <summary>
+            Update heartbeat for a Visual Studio instance
+            </summary>
+            <param name="processId">Process ID of the instance</param>
+            <returns>Heartbeat update result</returns>
+        </member>
+        <member name="M:RoslynBridge.WebApi.Controllers.InstancesController.GetAll">
+            <summary>
+            Get all registered Visual Studio instances
+            </summary>
+            <returns>List of registered instances</returns>
+        </member>
+        <member name="M:RoslynBridge.WebApi.Controllers.InstancesController.GetByProcessId(System.Int32)">
+            <summary>
+            Get instance by process ID
+            </summary>
+            <param name="processId">Process ID</param>
+            <returns>Instance information</returns>
+        </member>
+        <member name="M:RoslynBridge.WebApi.Controllers.InstancesController.GetBySolutionPath(System.String)">
+            <summary>
+            Get instance by solution path
+            </summary>
+            <param name="solutionPath">Solution file path</param>
+            <returns>Instance information</returns>
+        </member>
+        <member name="M:RoslynBridge.WebApi.Controllers.InstancesController.GetByPort(System.Int32)">
+            <summary>
+            Get instance by port
+            </summary>
+            <param name="port">Port number</param>
+            <returns>Instance information</returns>
+        </member>
+        <member name="T:RoslynBridge.WebApi.Controllers.RoslynController">
+            <summary>
+            Controller for Roslyn code analysis operations
+            </summary>
+        </member>
+        <member name="M:RoslynBridge.WebApi.Controllers.RoslynController.ExecuteQuery(RoslynBridge.WebApi.Models.RoslynQueryRequest,System.Nullable{System.Int32},System.Threading.CancellationToken)">
+            <summary>
+            Execute a Roslyn query
+            </summary>
+            <param name="request">The query request</param>
+            <param name="instancePort">Optional: specific VS instance port to target</param>
+            <param name="cancellationToken">Cancellation token</param>
+            <returns>The query result</returns>
+            <response code="200">Query executed successfully</response>
+            <response code="400">Invalid request</response>
+            <response code="500">Internal server error</response>
+        </member>
+        <member name="M:RoslynBridge.WebApi.Controllers.RoslynController.GetProjects(System.Nullable{System.Int32},System.Threading.CancellationToken)">
+            <summary>
+            Get all projects in the solution
+            </summary>
+            <param name="instancePort">Optional: specific VS instance port to target</param>
+            <param name="cancellationToken">Cancellation token</param>
+            <returns>List of projects</returns>
+        </member>
+        <member name="M:RoslynBridge.WebApi.Controllers.RoslynController.GetSolutionOverview(System.Nullable{System.Int32},System.Threading.CancellationToken)">
+            <summary>
+            Get solution overview
+            </summary>
+            <param name="instancePort">Optional: specific VS instance port to target</param>
+            <param name="cancellationToken">Cancellation token</param>
+            <returns>Solution statistics and overview</returns>
+        </member>
+        <member name="M:RoslynBridge.WebApi.Controllers.RoslynController.GetDiagnostics(System.String,System.Nullable{System.Int32},System.Threading.CancellationToken)">
+            <summary>
+            Get diagnostics (errors and warnings)
+            </summary>
+            <param name="filePath">Optional file path to filter diagnostics</param>
+            <param name="instancePort">Optional: specific VS instance port to target</param>
+            <param name="cancellationToken">Cancellation token</param>
+            <returns>List of diagnostics</returns>
+        </member>
+        <member name="M:RoslynBridge.WebApi.Controllers.RoslynController.GetSymbol(System.String,System.Int32,System.Int32,System.Nullable{System.Int32},System.Threading.CancellationToken)">
+            <summary>
+            Get symbol information at a specific position
+            </summary>
+            <param name="filePath">File path</param>
+            <param name="line">Line number (1-based)</param>
+            <param name="column">Column number (0-based)</param>
+            <param name="instancePort">Optional: specific VS instance port to target</param>
+            <param name="cancellationToken">Cancellation token</param>
+            <returns>Symbol information</returns>
+        </member>
+        <member name="M:RoslynBridge.WebApi.Controllers.RoslynController.FindReferences(System.String,System.Int32,System.Int32,System.Nullable{System.Int32},System.Threading.CancellationToken)">
+            <summary>
+            Find all references to a symbol
+            </summary>
+            <param name="filePath">File path</param>
+            <param name="line">Line number (1-based)</param>
+            <param name="column">Column number (0-based)</param>
+            <param name="instancePort">Optional: specific VS instance port to target</param>
+            <param name="cancellationToken">Cancellation token</param>
+            <returns>List of references</returns>
+        </member>
+        <member name="M:RoslynBridge.WebApi.Controllers.RoslynController.FindSymbol(System.String,System.String,System.Nullable{System.Int32},System.Threading.CancellationToken)">
+            <summary>
+            Search for symbols by name
+            </summary>
+            <param name="symbolName">Symbol name or pattern</param>
+            <param name="kind">Optional symbol kind filter</param>
+            <param name="instancePort">Optional: specific VS instance port to target</param>
+            <param name="cancellationToken">Cancellation token</param>
+            <returns>List of matching symbols</returns>
+        </member>
+        <member name="M:RoslynBridge.WebApi.Controllers.RoslynController.FormatDocument(System.String,System.Nullable{System.Int32},System.Threading.CancellationToken)">
+            <summary>
+            Format a document
+            </summary>
+            <param name="filePath">File path to format</param>
+            <param name="instancePort">Optional: specific VS instance port to target</param>
+            <param name="cancellationToken">Cancellation token</param>
+            <returns>Format operation result</returns>
+        </member>
+        <member name="M:RoslynBridge.WebApi.Controllers.RoslynController.AddNuGetPackage(System.String,System.String,System.String,System.Nullable{System.Int32},System.Threading.CancellationToken)">
+            <summary>
+            Add a NuGet package to a project
+            </summary>
+            <param name="projectName">Project name</param>
+            <param name="packageName">NuGet package name</param>
+            <param name="version">Optional package version</param>
+            <param name="instancePort">Optional: specific VS instance port to target</param>
+            <param name="cancellationToken">Cancellation token</param>
+            <returns>Operation result</returns>
+        </member>
+        <member name="M:RoslynBridge.WebApi.Controllers.RoslynController.BuildProject(System.String,System.String,System.Nullable{System.Int32},System.Threading.CancellationToken)">
+            <summary>
+            Build a project
+            </summary>
+            <param name="projectName">Project name</param>
+            <param name="configuration">Build configuration (Debug/Release)</param>
+            <param name="instancePort">Optional: specific VS instance port to target</param>
+            <param name="cancellationToken">Cancellation token</param>
+            <returns>Build result</returns>
+        </member>
+        <member name="T:RoslynBridge.WebApi.Middleware.HistoryMiddleware">
+            <summary>
+            Middleware to capture and log all Roslyn API requests and responses
+            </summary>
+        </member>
+        <member name="T:RoslynBridge.WebApi.Middleware.HistoryMiddlewareExtensions">
+            <summary>
+            Extension methods for adding history middleware
+            </summary>
+        </member>
+        <member name="T:RoslynBridge.WebApi.Models.HealthCheckResponse">
+            <summary>
+            Health check response for service status
+            </summary>
+        </member>
+        <member name="P:RoslynBridge.WebApi.Models.HealthCheckResponse.Status">
+            <summary>
+            Overall health status
+            </summary>
+        </member>
+        <member name="P:RoslynBridge.WebApi.Models.HealthCheckResponse.WebApiStatus">
+            <summary>
+            Web API service status
+            </summary>
+        </member>
+        <member name="P:RoslynBridge.WebApi.Models.HealthCheckResponse.VsPluginStatus">
+            <summary>
+            Visual Studio plugin connection status
+            </summary>
+        </member>
+        <member name="P:RoslynBridge.WebApi.Models.HealthCheckResponse.Timestamp">
+            <summary>
+            Timestamp of the health check
+            </summary>
+        </member>
+        <member name="P:RoslynBridge.WebApi.Models.HealthCheckResponse.Version">
+            <summary>
+            API version
+            </summary>
+        </member>
+        <member name="T:RoslynBridge.WebApi.Models.QueryHistoryEntry">
+            <summary>
+            Represents a single query history entry with request and response information
+            </summary>
+        </member>
+        <member name="P:RoslynBridge.WebApi.Models.QueryHistoryEntry.Id">
+            <summary>
+            Unique identifier for this history entry
+            </summary>
+        </member>
+        <member name="P:RoslynBridge.WebApi.Models.QueryHistoryEntry.Timestamp">
+            <summary>
+            Timestamp when the request was received
+            </summary>
+        </member>
+        <member name="P:RoslynBridge.WebApi.Models.QueryHistoryEntry.Path">
+            <summary>
+            The endpoint path that was called
+            </summary>
+        </member>
+        <member name="P:RoslynBridge.WebApi.Models.QueryHistoryEntry.Method">
+            <summary>
+            HTTP method used
+            </summary>
+        </member>
+        <member name="P:RoslynBridge.WebApi.Models.QueryHistoryEntry.Request">
+            <summary>
+            The Roslyn query request
+            </summary>
+        </member>
+        <member name="P:RoslynBridge.WebApi.Models.QueryHistoryEntry.Response">
+            <summary>
+            The Roslyn query response
+            </summary>
+        </member>
+        <member name="P:RoslynBridge.WebApi.Models.QueryHistoryEntry.DurationMs">
+            <summary>
+            Request duration in milliseconds
+            </summary>
+        </member>
+        <member name="P:RoslynBridge.WebApi.Models.QueryHistoryEntry.Success">
+            <summary>
+            Whether the request was successful
+            </summary>
+        </member>
+        <member name="P:RoslynBridge.WebApi.Models.QueryHistoryEntry.ClientIp">
+            <summary>
+            Client IP address
+            </summary>
+        </member>
+        <member name="T:RoslynBridge.WebApi.Models.RoslynQueryRequest">
+            <summary>
+            Request model for Roslyn query operations
+            </summary>
+        </member>
+        <member name="P:RoslynBridge.WebApi.Models.RoslynQueryRequest.QueryType">
+            <summary>
+            Type of query to execute (e.g., "getsymbol", "getdocument", "findreferences")
+            </summary>
+        </member>
+        <member name="P:RoslynBridge.WebApi.Models.RoslynQueryRequest.FilePath">
+            <summary>
+            File path for file-based operations
+            </summary>
+        </member>
+        <member name="P:RoslynBridge.WebApi.Models.RoslynQueryRequest.SymbolName">
+            <summary>
+            Symbol name for symbol-based operations
+            </summary>
+        </member>
+        <member name="P:RoslynBridge.WebApi.Models.RoslynQueryRequest.Line">
+            <summary>
+            Line number (1-based) for position-based operations
+            </summary>
+        </member>
+        <member name="P:RoslynBridge.WebApi.Models.RoslynQueryRequest.Column">
+            <summary>
+            Column number (0-based) for position-based operations
+            </summary>
+        </member>
+        <member name="P:RoslynBridge.WebApi.Models.RoslynQueryRequest.Parameters">
+            <summary>
+            Additional parameters for the query
+            </summary>
+        </member>
+        <member name="P:RoslynBridge.WebApi.Models.RoslynQueryRequest.ProjectName">
+            <summary>
+            Project name for project operations
+            </summary>
+        </member>
+        <member name="P:RoslynBridge.WebApi.Models.RoslynQueryRequest.PackageName">
+            <summary>
+            Package name for NuGet operations
+            </summary>
+        </member>
+        <member name="P:RoslynBridge.WebApi.Models.RoslynQueryRequest.Version">
+            <summary>
+            Version for NuGet package operations
+            </summary>
+        </member>
+        <member name="P:RoslynBridge.WebApi.Models.RoslynQueryRequest.Configuration">
+            <summary>
+            Build configuration (Debug/Release)
+            </summary>
+        </member>
+        <member name="P:RoslynBridge.WebApi.Models.RoslynQueryRequest.DirectoryPath">
+            <summary>
+            Directory path for directory operations
+            </summary>
+        </member>
+        <member name="T:RoslynBridge.WebApi.Models.RoslynQueryResponse">
+            <summary>
+            Response model for Roslyn query operations
+            </summary>
+        </member>
+        <member name="P:RoslynBridge.WebApi.Models.RoslynQueryResponse.Success">
+            <summary>
+            Indicates whether the operation was successful
+            </summary>
+        </member>
+        <member name="P:RoslynBridge.WebApi.Models.RoslynQueryResponse.Message">
+            <summary>
+            Optional message providing additional context
+            </summary>
+        </member>
+        <member name="P:RoslynBridge.WebApi.Models.RoslynQueryResponse.Data">
+            <summary>
+            The response data (structure varies by query type)
+            </summary>
+        </member>
+        <member name="P:RoslynBridge.WebApi.Models.RoslynQueryResponse.Error">
+            <summary>
+            Error message if the operation failed
+            </summary>
+        </member>
+        <member name="T:RoslynBridge.WebApi.Models.VSInstanceInfo">
+            <summary>
+            Information about a registered Visual Studio instance
+            </summary>
+        </member>
+        <member name="P:RoslynBridge.WebApi.Models.VSInstanceInfo.Port">
+            <summary>
+            The port number where this VS instance is listening
+            </summary>
+        </member>
+        <member name="P:RoslynBridge.WebApi.Models.VSInstanceInfo.ProcessId">
+            <summary>
+            The process ID of the Visual Studio instance
+            </summary>
+        </member>
+        <member name="P:RoslynBridge.WebApi.Models.VSInstanceInfo.SolutionPath">
+            <summary>
+            The solution file path (if any solution is open)
+            </summary>
+        </member>
+        <member name="P:RoslynBridge.WebApi.Models.VSInstanceInfo.SolutionName">
+            <summary>
+            The solution name (if any solution is open)
+            </summary>
+        </member>
+        <member name="P:RoslynBridge.WebApi.Models.VSInstanceInfo.RegisteredAt">
+            <summary>
+            When this instance was registered
+            </summary>
+        </member>
+        <member name="P:RoslynBridge.WebApi.Models.VSInstanceInfo.LastHeartbeat">
+            <summary>
+            Last heartbeat time
+            </summary>
+        </member>
+        <member name="P:RoslynBridge.WebApi.Models.VSInstanceInfo.Projects">
+            <summary>
+            List of project names in the solution
+            </summary>
+        </member>
+        <member name="T:RoslynBridge.WebApi.Services.HistoryService">
+            <summary>
+            In-memory implementation of history service
+            </summary>
+        </member>
+        <member name="T:RoslynBridge.WebApi.Services.IHistoryService">
+            <summary>
+            Service for managing query history
+            </summary>
+        </member>
+        <member name="M:RoslynBridge.WebApi.Services.IHistoryService.Add(RoslynBridge.WebApi.Models.QueryHistoryEntry)">
+            <summary>
+            Add a new history entry
+            </summary>
+            <param name="entry">The history entry to add</param>
+        </member>
+        <member name="M:RoslynBridge.WebApi.Services.IHistoryService.GetAll">
+            <summary>
+            Get all history entries
+            </summary>
+            <returns>List of all history entries</returns>
+        </member>
+        <member name="M:RoslynBridge.WebApi.Services.IHistoryService.GetById(System.String)">
+            <summary>
+            Get a specific history entry by ID
+            </summary>
+            <param name="id">The entry ID</param>
+            <returns>The history entry, or null if not found</returns>
+        </member>
+        <member name="M:RoslynBridge.WebApi.Services.IHistoryService.GetRecent(System.Int32)">
+            <summary>
+            Get recent history entries
+            </summary>
+            <param name="count">Number of entries to return</param>
+            <returns>List of recent history entries</returns>
+        </member>
+        <member name="M:RoslynBridge.WebApi.Services.IHistoryService.Clear">
+            <summary>
+            Clear all history entries
+            </summary>
+        </member>
+        <member name="M:RoslynBridge.WebApi.Services.IHistoryService.GetCount">
+            <summary>
+            Get total count of history entries
+            </summary>
+            <returns>Total number of entries</returns>
+        </member>
+        <member name="T:RoslynBridge.WebApi.Services.IInstanceRegistryService">
+            <summary>
+            Service for managing registered Visual Studio instances
+            </summary>
+        </member>
+        <member name="M:RoslynBridge.WebApi.Services.IInstanceRegistryService.Register(RoslynBridge.WebApi.Models.VSInstanceInfo)">
+            <summary>
+            Register a new Visual Studio instance
+            </summary>
+        </member>
+        <member name="M:RoslynBridge.WebApi.Services.IInstanceRegistryService.Unregister(System.Int32)">
+            <summary>
+            Unregister a Visual Studio instance by process ID
+            </summary>
+        </member>
+        <member name="M:RoslynBridge.WebApi.Services.IInstanceRegistryService.UpdateHeartbeat(System.Int32)">
+            <summary>
+            Update heartbeat for an instance
+            </summary>
+        </member>
+        <member name="M:RoslynBridge.WebApi.Services.IInstanceRegistryService.GetAllInstances">
+            <summary>
+            Get all registered instances
+            </summary>
+        </member>
+        <member name="M:RoslynBridge.WebApi.Services.IInstanceRegistryService.GetByProcessId(System.Int32)">
+            <summary>
+            Get instance by process ID
+            </summary>
+        </member>
+        <member name="M:RoslynBridge.WebApi.Services.IInstanceRegistryService.GetBySolutionPath(System.String)">
+            <summary>
+            Get instance by solution path
+            </summary>
+        </member>
+        <member name="M:RoslynBridge.WebApi.Services.IInstanceRegistryService.GetByPort(System.Int32)">
+            <summary>
+            Get instance by port
+            </summary>
+        </member>
+        <member name="M:RoslynBridge.WebApi.Services.IInstanceRegistryService.RemoveStaleInstances(System.TimeSpan)">
+            <summary>
+            Remove stale instances (no heartbeat for specified timeout)
+            </summary>
+        </member>
+        <member name="T:RoslynBridge.WebApi.Services.InstanceCleanupService">
+            <summary>
+            Background service that periodically removes stale VS instances
+            </summary>
+        </member>
+        <member name="T:RoslynBridge.WebApi.Services.InstanceRegistryService">
+            <summary>
+            Thread-safe in-memory registry for Visual Studio instances
+            </summary>
+        </member>
+        <member name="T:RoslynBridge.WebApi.Services.IRoslynBridgeClient">
+            <summary>
+            Interface for communicating with the Roslyn Bridge Visual Studio plugin
+            </summary>
+        </member>
+        <member name="M:RoslynBridge.WebApi.Services.IRoslynBridgeClient.ExecuteQueryAsync(RoslynBridge.WebApi.Models.RoslynQueryRequest,System.Nullable{System.Int32},System.Threading.CancellationToken)">
+            <summary>
+            Execute a query against the Roslyn Bridge server
+            </summary>
+            <param name="request">The query request</param>
+            <param name="instancePort">Optional port of specific VS instance to target</param>
+            <param name="cancellationToken">Cancellation token</param>
+            <returns>The query response</returns>
+        </member>
+        <member name="M:RoslynBridge.WebApi.Services.IRoslynBridgeClient.IsHealthyAsync(System.Nullable{System.Int32},System.Threading.CancellationToken)">
+            <summary>
+            Check if the Roslyn Bridge server is healthy
+            </summary>
+            <param name="instancePort">Optional port of specific VS instance to check</param>
+            <param name="cancellationToken">Cancellation token</param>
+            <returns>True if healthy, false otherwise</returns>
+        </member>
+        <member name="T:RoslynBridge.WebApi.Services.RoslynBridgeClient">
+            <summary>
+            HTTP client for communicating with the Roslyn Bridge Visual Studio plugin
+            </summary>
+        </member>
+        <member name="M:RoslynBridge.WebApi.Services.RoslynBridgeClient.ResolveInstancePortAsync(System.Nullable{System.Int32},RoslynBridge.WebApi.Models.RoslynQueryRequest)">
+            <summary>
+            Resolves which VS instance port to use based on provided hints
+            </summary>
+        </member>
+    </members>
+</doc>
