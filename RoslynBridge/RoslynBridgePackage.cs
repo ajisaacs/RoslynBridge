@@ -18,6 +18,7 @@ namespace RoslynBridge
     {
         public const string PackageGuidString = "b2c3d4e5-f6a7-4b5c-9d8e-0f1a2b3c4d5e";
         private BridgeServer? _bridgeServer;
+        private Services.RegistrationService? _registrationService;
 
         protected override async Task InitializeAsync(CancellationToken cancellationToken, IProgress<ServiceProgressData> progress)
         {
@@ -28,6 +29,10 @@ namespace RoslynBridge
                 // Initialize the HTTP bridge server
                 _bridgeServer = new BridgeServer(this);
                 await _bridgeServer.StartAsync();
+
+                // Register with WebAPI
+                _registrationService = new Services.RegistrationService(this, _bridgeServer.Port);
+                await _registrationService.RegisterAsync();
 
                 await base.InitializeAsync(cancellationToken, progress);
             }
@@ -43,6 +48,8 @@ namespace RoslynBridge
         {
             if (disposing)
             {
+                _registrationService?.UnregisterAsync().Wait(TimeSpan.FromSeconds(5));
+                _registrationService?.Dispose();
                 _bridgeServer?.Dispose();
             }
             base.Dispose(disposing);
