@@ -74,12 +74,14 @@
 
     <!-- Services -->
     <Compile Include="Services\BaseRoslynService.cs" />
+    <Compile Include="Services\ConfigurationService.cs" />
     <Compile Include="Services\DiagnosticsService.cs" />
     <Compile Include="Services\DocumentQueryService.cs" />
     <Compile Include="Services\IRoslynQueryService.cs" />
     <Compile Include="Services\IWorkspaceProvider.cs" />
     <Compile Include="Services\ProjectOperationsService.cs" />
     <Compile Include="Services\RefactoringService.cs" />
+    <Compile Include="Services\RegistrationService.cs" />
     <Compile Include="Services\RoslynQueryService.cs" />
     <Compile Include="Services\SymbolQueryService.cs" />
     <Compile Include="Services\WorkspaceProvider.cs" />
@@ -87,6 +89,10 @@
     <None Include="source.extension.vsixmanifest">
       <SubType>Designer</SubType>
     </None>
+    <Content Include="appsettings.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <IncludeInVSIX>true</IncludeInVSIX>
+    </Content>
     <Content Include="README.txt">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
       <IncludeInVSIX>true</IncludeInVSIX>
@@ -95,6 +101,7 @@
 
   <ItemGroup>
     <Reference Include="System" />
+    <Reference Include="System.Data" />
     <Reference Include="System.Net.Http" />
   </ItemGroup>
 
