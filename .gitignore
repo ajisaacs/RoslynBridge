@@ -32,4 +32,5 @@ _ReSharper*/
 #Nuget packages folder
 packages/
 /RoslynBridge.WebApi/publish/
-/RoslynBridge.WebApi/publish/
+# Claude Code user-specific settings
+**/settings.local.json
