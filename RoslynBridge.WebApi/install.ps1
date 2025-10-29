@@ -2,360 +2,166 @@
 
 <#
 .SYNOPSIS
-    Complete installation script for Roslyn Bridge Web API
+    Installs Roslyn Bridge Web API as a Windows Service
 
 .DESCRIPTION
-    This script performs a complete installation of the Roslyn Bridge Web API:
-    - Checks prerequisites (.NET SDK)
-    - Restores NuGet packages
-    - Builds the project
-    - Publishes the release build
-    - Optionally installs as Windows Service
-    - Tests the installation
-
-.PARAMETER SkipBuild
-    Skip the build step (use existing build)
-
-.PARAMETER SkipPublish
-    Skip the publish step (use existing publish)
-
-.PARAMETER InstallService
-    Install as Windows Service after publishing
-
-.PARAMETER StartService
-    Start the service after installation (requires -InstallService)
+    Builds, publishes, and installs the Roslyn Bridge Web API as a Windows Service
 
 .PARAMETER Configuration
     Build configuration (Debug or Release). Default: Release
 
+.PARAMETER ServiceName
+    Windows Service name. Default: RoslynBridgeWebApi
+
 .PARAMETER PublishPath
-    Path where the application will be published. Default: ./publish
+    Installation path. Default: C:\Services\RoslynBridge.WebApi
 
 .EXAMPLE
     .\install.ps1
-    Full installation without service setup
-
-.EXAMPLE
-    .\install.ps1 -InstallService -StartService
-    Full installation with automatic service setup and start
+    Installs with default settings
 
 .EXAMPLE
     .\install.ps1 -Configuration Debug
-    Install debug build instead of release
+    Installs debug build
 #>
 
 param(
-    [Parameter(Mandatory=$false)]
-    [switch]$SkipBuild,
-
-    [Parameter(Mandatory=$false)]
-    [switch]$SkipPublish,
-
-    [Parameter(Mandatory=$false)]
-    [switch]$InstallService,
-
-    [Parameter(Mandatory=$false)]
-    [switch]$StartService,
-
     [Parameter(Mandatory=$false)]
     [ValidateSet("Debug", "Release")]
     [string]$Configuration = "Release",
 
     [Parameter(Mandatory=$false)]
-    [string]$PublishPath = ".\publish"
+    [string]$ServiceName = "RoslynBridgeWebApi",
+
+    [Parameter(Mandatory=$false)]
+    [string]$DisplayName = "Roslyn Bridge Web API",
+
+    [Parameter(Mandatory=$false)]
+    [string]$PublishPath = "C:\Services\RoslynBridge.WebApi"
 )
 
-# Script configuration
 $ErrorActionPreference = "Stop"
-$ProjectName = "RoslynBridge.WebApi"
 $ProjectFile = ".\RoslynBridge.WebApi.csproj"
 
-# Color output helper
-function Write-ColorOutput {
-    param(
-        [string]$Message,
-        [string]$Color = "White"
-    )
-    Write-Host $Message -ForegroundColor $Color
-}
-
-# Banner
-function Show-Banner {
-    Write-ColorOutput "`n============================================================" "Cyan"
-    Write-ColorOutput "     Roslyn Bridge Web API - Installation Script" "Cyan"
-    Write-ColorOutput "============================================================`n" "Cyan"
-}
-
-# Step counter
-$script:stepNumber = 0
 function Write-Step {
     param([string]$Message)
-    $script:stepNumber++
-    Write-ColorOutput "`n[$script:stepNumber] $Message" "Yellow"
-    Write-ColorOutput ("-" * 60) "DarkGray"
+    Write-Host "`n>> $Message" -ForegroundColor Cyan
 }
 
-# Check prerequisites
-function Test-Prerequisites {
-    Write-Step "Checking Prerequisites"
-
-    # Check for .NET SDK
-    Write-Host "Checking for .NET SDK... " -NoNewline
-    try {
-        $dotnetVersion = dotnet --version 2>$null
-        if ($LASTEXITCODE -eq 0) {
-            Write-ColorOutput "Found v$dotnetVersion" "Green"
-        } else {
-            throw "dotnet command failed"
-        }
-    }
-    catch {
-        Write-ColorOutput "NOT FOUND" "Red"
-        Write-ColorOutput "`nError: .NET SDK is not installed or not in PATH." "Red"
-        Write-ColorOutput "Please download and install from: https://dot.net" "Yellow"
-        exit 1
-    }
-
-    # Check for project file
-    Write-Host "Checking for project file... " -NoNewline
-    if (Test-Path $ProjectFile) {
-        Write-ColorOutput "Found" "Green"
-    } else {
-        Write-ColorOutput "NOT FOUND" "Red"
-        Write-ColorOutput "`nError: Project file not found: $ProjectFile" "Red"
-        Write-ColorOutput "Please run this script from the RoslynBridge.WebApi directory." "Yellow"
-        exit 1
-    }
-
-    Write-ColorOutput "`nAll prerequisites satisfied!" "Green"
+function Write-Success {
+    param([string]$Message)
+    Write-Host "   $Message" -ForegroundColor Green
 }
 
-# Restore NuGet packages
-function Restore-Packages {
-    Write-Step "Restoring NuGet Packages"
-
-    try {
-        dotnet restore $ProjectFile
-        if ($LASTEXITCODE -ne 0) {
-            throw "dotnet restore failed with exit code $LASTEXITCODE"
-        }
-        Write-ColorOutput "`nPackages restored successfully!" "Green"
-    }
-    catch {
-        Write-ColorOutput "`nError during package restore: $_" "Red"
-        exit 1
-    }
+function Write-Info {
+    param([string]$Message)
+    Write-Host "   $Message" -ForegroundColor Gray
 }
 
-# Build project
-function Build-Project {
-    Write-Step "Building Project ($Configuration)"
-
-    try {
-        dotnet build $ProjectFile -c $Configuration --no-restore
-        if ($LASTEXITCODE -ne 0) {
-            throw "dotnet build failed with exit code $LASTEXITCODE"
-        }
-        Write-ColorOutput "`nBuild completed successfully!" "Green"
-    }
-    catch {
-        Write-ColorOutput "`nError during build: $_" "Red"
-        exit 1
-    }
-}
-
-# Publish project
-function Publish-Project {
-    Write-Step "Publishing Project"
-
-    Write-ColorOutput "Configuration: $Configuration" "Gray"
-    Write-ColorOutput "Output Path:   $PublishPath" "Gray"
-
-    try {
-        # Clean publish directory if it exists
-        if (Test-Path $PublishPath) {
-            Write-Host "`nCleaning existing publish directory... " -NoNewline
-            Remove-Item -Path $PublishPath -Recurse -Force
-            Write-ColorOutput "Done" "Green"
-        }
-
-        # Publish
-        dotnet publish $ProjectFile -c $Configuration -o $PublishPath --no-build --no-restore
-        if ($LASTEXITCODE -ne 0) {
-            throw "dotnet publish failed with exit code $LASTEXITCODE"
-        }
-
-        # Verify executable exists
-        $exePath = Join-Path $PublishPath "$ProjectName.exe"
-        if (Test-Path $exePath) {
-            Write-ColorOutput "`nProject published successfully!" "Green"
-            Write-ColorOutput "Executable: $exePath" "Gray"
-
-            # Show publish directory size
-            $publishSize = (Get-ChildItem $PublishPath -Recurse | Measure-Object -Property Length -Sum).Sum / 1MB
-            Write-ColorOutput ("Publish size: {0:N2} MB" -f $publishSize) "Gray"
-        } else {
-            throw "Executable not found after publish: $exePath"
-        }
-    }
-    catch {
-        Write-ColorOutput "`nError during publish: $_" "Red"
-        exit 1
-    }
-}
-
-# Install Windows Service
-function Install-WindowsService {
-    Write-Step "Installing Windows Service"
-
-    if (-not (Test-Path ".\install-service.ps1")) {
-        Write-ColorOutput "Error: install-service.ps1 not found" "Red"
-        return $false
-    }
-
-    try {
-        & ".\install-service.ps1" -Action Install -PublishPath $PublishPath
-        return $true
-    }
-    catch {
-        Write-ColorOutput "Error installing service: $_" "Red"
-        return $false
-    }
-}
-
-# Start Windows Service
-function Start-WindowsService {
-    Write-Step "Starting Windows Service"
-
-    if (-not (Test-Path ".\install-service.ps1")) {
-        Write-ColorOutput "Error: install-service.ps1 not found" "Red"
-        return $false
-    }
-
-    try {
-        & ".\install-service.ps1" -Action Start
-        return $true
-    }
-    catch {
-        Write-ColorOutput "Error starting service: $_" "Red"
-        return $false
-    }
-}
-
-# Test installation
-function Test-Installation {
-    Write-Step "Installation Summary"
-
-    $publishFullPath = Resolve-Path $PublishPath -ErrorAction SilentlyContinue
-    if ($publishFullPath) {
-        Write-ColorOutput "`nPublished to: $publishFullPath" "Green"
-
-        $exePath = Join-Path $publishFullPath "$ProjectName.exe"
-        if (Test-Path $exePath) {
-            Write-ColorOutput "Executable:   $exePath" "Green"
-        }
-    }
-
-    if ($InstallService) {
-        $service = Get-Service -Name "RoslynBridgeWebApi" -ErrorAction SilentlyContinue
-        if ($service) {
-            Write-ColorOutput "`nWindows Service Status:" "Cyan"
-            Write-ColorOutput "  Name:   $($service.Name)" "Gray"
-            Write-ColorOutput "  Status: $($service.Status)" $(if ($service.Status -eq "Running") { "Green" } else { "Yellow" })
-            Write-ColorOutput "  Type:   $($service.StartType)" "Gray"
-        }
-    }
-}
-
-# Show next steps
-function Show-NextSteps {
-    Write-Step "Next Steps"
-
-    if ($InstallService) {
-        if ($StartService) {
-            Write-ColorOutput "`nThe service is now running!" "Green"
-            Write-ColorOutput "`nAPI should be available at:" "Cyan"
-            Write-ColorOutput "  http://localhost:5000" "White"
-            Write-ColorOutput "  https://localhost:7001 (HTTPS)" "White"
-            Write-ColorOutput "`nSwagger UI:" "Cyan"
-            Write-ColorOutput "  http://localhost:5000" "White"
-            Write-ColorOutput "`nTo manage the service:" "Yellow"
-            Write-ColorOutput "  .\install-service.ps1 -Action Status" "White"
-            Write-ColorOutput "  .\install-service.ps1 -Action Stop" "White"
-            Write-ColorOutput "  .\install-service.ps1 -Action Restart" "White"
-            Write-ColorOutput "  .\install-service.ps1 -Action Uninstall" "White"
-        } else {
-            Write-ColorOutput "`nService installed but not started." "Yellow"
-            Write-ColorOutput "`nTo start the service:" "Cyan"
-            Write-ColorOutput "  .\install-service.ps1 -Action Start" "White"
-        }
-    } else {
-        Write-ColorOutput "`nTo run the application manually:" "Cyan"
-        Write-ColorOutput "  cd $PublishPath" "White"
-        Write-ColorOutput "  .\$ProjectName.exe" "White"
-        Write-ColorOutput "`nTo install as a Windows Service:" "Cyan"
-        Write-ColorOutput "  .\install-service.ps1 -Action Install -PublishPath $PublishPath" "White"
-        Write-ColorOutput "  .\install-service.ps1 -Action Start" "White"
-        Write-ColorOutput "`nOr run this script again with -InstallService -StartService flags" "Gray"
-    }
-
-    Write-ColorOutput "`nFor more information, see README.md" "Gray"
-}
-
-# Main execution
 try {
-    Show-Banner
+    Write-Host "`n========================================" -ForegroundColor Cyan
+    Write-Host "  Roslyn Bridge Web API Installer" -ForegroundColor Cyan
+    Write-Host "========================================`n" -ForegroundColor Cyan
 
-    # Show configuration
-    Write-ColorOutput "Installation Configuration:" "Cyan"
-    Write-ColorOutput "  Configuration:   $Configuration" "Gray"
-    Write-ColorOutput "  Publish Path:    $PublishPath" "Gray"
-    Write-ColorOutput "  Install Service: $InstallService" "Gray"
-    Write-ColorOutput "  Start Service:   $StartService" "Gray"
-    Write-ColorOutput "  Skip Build:      $SkipBuild" "Gray"
-    Write-ColorOutput "  Skip Publish:    $SkipPublish" "Gray"
-
-    # Execute installation steps
-    Test-Prerequisites
-
-    if (-not $SkipBuild) {
-        Restore-Packages
-        Build-Project
-    } else {
-        Write-ColorOutput "`nSkipping build (using existing build)" "Yellow"
+    # Check prerequisites
+    Write-Step "Checking prerequisites"
+    $dotnetVersion = dotnet --version 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        throw ".NET SDK not found. Install from https://dot.net"
     }
+    Write-Success ".NET SDK v$dotnetVersion"
 
-    if (-not $SkipPublish) {
-        Publish-Project
-    } else {
-        Write-ColorOutput "`nSkipping publish (using existing publish)" "Yellow"
+    if (-not (Test-Path $ProjectFile)) {
+        throw "Project file not found: $ProjectFile"
     }
+    Write-Success "Project file found"
 
-    # Optional service installation
-    if ($InstallService) {
-        $serviceInstalled = Install-WindowsService
-
-        if ($serviceInstalled -and $StartService) {
-            Start-WindowsService
+    # Stop existing service before file operations
+    $existingService = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+    if ($existingService) {
+        Write-Step "Stopping existing service"
+        if ($existingService.Status -eq "Running") {
+            Stop-Service -Name $ServiceName -Force
+            Start-Sleep -Seconds 2
+            Write-Success "Service stopped"
         }
     }
 
-    # Show results
-    Test-Installation
-    Show-NextSteps
+    # Build
+    Write-Step "Building project ($Configuration)"
+    dotnet build $ProjectFile -c $Configuration
+    if ($LASTEXITCODE -ne 0) { throw "Build failed" }
+    Write-Success "Build completed"
 
-    Write-ColorOutput "`n============================================================" "Cyan"
-    Write-ColorOutput "          Installation Completed Successfully!" "Cyan"
-    Write-ColorOutput "============================================================`n" "Cyan"
+    # Publish
+    Write-Step "Publishing to $PublishPath"
+    if (Test-Path $PublishPath) {
+        Remove-Item -Path $PublishPath -Recurse -Force
+    }
+    dotnet publish $ProjectFile -c $Configuration -o $PublishPath
+    if ($LASTEXITCODE -ne 0) { throw "Publish failed" }
+
+    $exePath = Join-Path $PublishPath "RoslynBridge.WebApi.exe"
+    if (-not (Test-Path $exePath)) {
+        throw "Executable not found: $exePath"
+    }
+    Write-Success "Published to $PublishPath"
+
+    # Remove existing service registration
+    if ($existingService) {
+        Write-Step "Removing existing service registration"
+        sc.exe delete $ServiceName | Out-Null
+        Start-Sleep -Seconds 2
+        Write-Success "Service registration removed"
+    }
+
+    # Create service
+    Write-Info "Creating service..."
+    $result = sc.exe create $ServiceName binPath= "`"$exePath`"" start= auto DisplayName= $DisplayName
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to create service: $result"
+    }
+
+    # Configure service
+    sc.exe description $ServiceName "Web API middleware for Roslyn Bridge" | Out-Null
+    sc.exe failure $ServiceName reset= 86400 actions= restart/5000/restart/10000/restart/30000 | Out-Null
+
+    Write-Success "Service installed"
+
+    # Start service
+    Write-Step "Starting service"
+    Start-Service -Name $ServiceName
+    Start-Sleep -Seconds 3
+
+    $service = Get-Service -Name $ServiceName
+    if ($service.Status -eq "Running") {
+        Write-Success "Service started successfully"
+
+        Write-Host "`n========================================" -ForegroundColor Green
+        Write-Host "  Installation Complete!" -ForegroundColor Green
+        Write-Host "========================================" -ForegroundColor Green
+
+        Write-Host "`nAPI Endpoints:" -ForegroundColor Cyan
+        Write-Host "  http://localhost:5001" -ForegroundColor White
+        Write-Host "  Swagger UI: http://localhost:5001" -ForegroundColor White
+
+        Write-Host "`nService Management:" -ForegroundColor Cyan
+        Write-Host "  Start:     Start-Service $ServiceName" -ForegroundColor Gray
+        Write-Host "  Stop:      Stop-Service $ServiceName" -ForegroundColor Gray
+        Write-Host "  Restart:   Restart-Service $ServiceName" -ForegroundColor Gray
+        Write-Host "  Status:    Get-Service $ServiceName" -ForegroundColor Gray
+        Write-Host "  Uninstall: sc.exe delete $ServiceName" -ForegroundColor Gray
+        Write-Host ""
+    } else {
+        throw "Service failed to start. Status: $($service.Status)"
+    }
 
     exit 0
 }
 catch {
-    Write-ColorOutput "`n============================================================" "Red"
-    Write-ColorOutput "                 Installation Failed!" "Red"
-    Write-ColorOutput "============================================================`n" "Red"
-    Write-ColorOutput "Error: $_" "Red"
-    Write-ColorOutput "`nStack Trace:" "DarkGray"
-    Write-ColorOutput $_.ScriptStackTrace "DarkGray"
+    Write-Host "`n========================================" -ForegroundColor Red
+    Write-Host "  Installation Failed!" -ForegroundColor Red
+    Write-Host "========================================" -ForegroundColor Red
+    Write-Host "Error: $_" -ForegroundColor Red
     exit 1
 }
