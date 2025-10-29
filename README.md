@@ -138,16 +138,16 @@ The easiest way to query your solution:
 cd C:\Projects\YourSolution
 
 # Get diagnostics summary
-.\scripts\webapi-query.ps1 summary
+.\scripts\rb.ps1 summary
 
 # Get all errors
-.\scripts\webapi-query.ps1 errors
+.\scripts\rb.ps1 errors
 
 # Get all warnings
-.\scripts\webapi-query.ps1 warnings
+.\scripts\rb.ps1 warnings
 
 # List projects
-.\scripts\webapi-query.ps1 projects
+.\scripts\rb.ps1 projects
 ```
 
 The script auto-detects your solution name from the current directory.
