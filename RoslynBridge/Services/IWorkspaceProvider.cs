@@ -1,3 +1,4 @@
+#nullable enable
 using Microsoft.VisualStudio.LanguageServices;
 
 namespace RoslynBridge.Services

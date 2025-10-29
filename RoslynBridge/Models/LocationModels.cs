@@ -1,3 +1,5 @@
+#nullable enable
+
 namespace RoslynBridge.Models
 {
     public class LocationInfo
