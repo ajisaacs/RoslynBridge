@@ -5,7 +5,6 @@
         <DisplayName>Roslyn Bridge</DisplayName>
         <Description xml:space="preserve">Visual Studio extension that provides access to Roslyn APIs through an HTTP bridge for Claude integration.</Description>
         <MoreInfo>https://github.com/yourusername/ClaudeRoslynBridge</MoreInfo>
-        <License>README.txt</License>
         <Tags>Roslyn, Claude, AI, Code Analysis</Tags>
     </Metadata>
     <Installation>
