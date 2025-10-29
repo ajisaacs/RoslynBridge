@@ -111,8 +111,8 @@ RoslynBridge exposes Visual Studio's live Roslyn workspace via HTTP, enabling:
 
 4. **Install the WebAPI service** (requires Administrator)
    ```powershell
-   cd RoslynBridge.WebApi
-   .\install.ps1
+   # From repo root
+   scripts\webapi-install.ps1 -Configuration Release
    ```
 
 The service will start automatically and be available at `http://localhost:5001`
@@ -138,16 +138,16 @@ The easiest way to query your solution:
 cd C:\Projects\YourSolution
 
 # Get diagnostics summary
-.\path\to\RoslynBridge.WebApi\query.ps1 summary
+.\scripts\webapi-query.ps1 summary
 
 # Get all errors
-.\path\to\RoslynBridge.WebApi\query.ps1 errors
+.\scripts\webapi-query.ps1 errors
 
 # Get all warnings
-.\path\to\RoslynBridge.WebApi\query.ps1 warnings
+.\scripts\webapi-query.ps1 warnings
 
 # List projects
-.\path\to\RoslynBridge.WebApi\query.ps1 projects
+.\scripts\webapi-query.ps1 projects
 ```
 
 The script auto-detects your solution name from the current directory.
@@ -352,8 +352,7 @@ Get-Service RoslynBridgeWebApi
 Start-Service RoslynBridgeWebApi
 
 # Reinstall if missing
-cd RoslynBridge.WebApi
-.\install.ps1
+scripts\webapi-install.ps1 -Configuration Release
 ```
 
 ### Wrong Solution Queried
@@ -492,3 +491,29 @@ Built with:
 ---
 
 **Made with ❤️ for the C# developer community**
+## Reinstalling the VS Extension
+
+Use the helper script to build and reinstall the VSIX in Visual Studio 2022.
+
+```powershell
+# From repo root
+scripts\reinstall-vsix.ps1 -Configuration Debug
+
+# Options
+# -SkipBuild     Reuse existing VSIX in bin/<Config>
+# -NoUninstall   Skip uninstall step (install over existing)
+# -VerboseOutput Show VSIXInstaller UI/log output
+```
+
+Quick double-click runner (passes args through):
+
+```cmd
+scripts\reinstall-vsix.cmd -Configuration Release
+```
+
+Requirements:
+- Visual Studio 2022 with MSBuild and VSIXInstaller
+- Execution policy allowing PowerShell scripts (or use the .cmd wrapper)
+
+
+

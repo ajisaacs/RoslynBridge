@@ -13,15 +13,15 @@
     Base URL of the Roslyn Bridge WebAPI. Default: http://localhost:5001
 
 .EXAMPLE
-    .\query.ps1 diagnostics
-    Get diagnostics for the current solution
+    .\webapi-query.ps1 summary
+    Get diagnostics summary for the current solution
 
 .EXAMPLE
-    .\query.ps1 projects -SolutionName "RoslynBridge"
+    .\webapi-query.ps1 projects -SolutionName "RoslynBridge"
     Get projects for a specific solution
 
 .EXAMPLE
-    .\query.ps1 errors
+    .\webapi-query.ps1 errors
     Get only errors for the current solution
 #>
 
@@ -42,7 +42,7 @@ $ErrorActionPreference = "Stop"
 function Write-Info { param([string]$Message) Write-Host $Message -ForegroundColor Cyan }
 function Write-Success { param([string]$Message) Write-Host $Message -ForegroundColor Green }
 function Write-Warning { param([string]$Message) Write-Host $Message -ForegroundColor Yellow }
-function Write-Error { param([string]$Message) Write-Host $Message -ForegroundColor Red }
+function Write-Err { param([string]$Message) Write-Host $Message -ForegroundColor Red }
 
 # Detect solution name from current directory
 function Get-CurrentSolution {
@@ -102,7 +102,7 @@ function Invoke-RoslynApi {
         return $response
     }
     catch {
-        Write-Error "API request failed: $_"
+        Write-Err "API request failed: $_"
         return $null
     }
 }
@@ -162,9 +162,9 @@ function Show-Help {
     Write-Host "  -ApiUrl <url>         Roslyn Bridge API URL (default: http://localhost:5001)" -ForegroundColor Gray
     Write-Host ""
     Write-Host "Examples:" -ForegroundColor Cyan
-    Write-Host "  .\query.ps1 errors" -ForegroundColor Gray
-    Write-Host "  .\query.ps1 projects -SolutionName 'RoslynBridge'" -ForegroundColor Gray
-    Write-Host "  .\query.ps1 summary" -ForegroundColor Gray
+    Write-Host "  .\scripts\webapi-query.ps1 errors" -ForegroundColor Gray
+    Write-Host "  .\scripts\webapi-query.ps1 projects -SolutionName 'RoslynBridge'" -ForegroundColor Gray
+    Write-Host "  .\scripts\webapi-query.ps1 summary" -ForegroundColor Gray
     Write-Host ""
 }
 
@@ -189,7 +189,7 @@ function Get-Diagnostics {
         Write-Success "Total: $($response.data.Count) diagnostic(s)"
     }
     else {
-        Write-Error "Failed to get diagnostics: $($response.error)"
+        Write-Err "Failed to get diagnostics: $($response.error)"
     }
 }
 
@@ -217,7 +217,7 @@ function Get-DiagnosticsSummary {
         Write-Host ""
     }
     else {
-        Write-Error "Failed to get summary: $($response.error)"
+        Write-Err "Failed to get summary: $($response.error)"
     }
 }
 
@@ -238,7 +238,7 @@ function Get-Projects {
         Write-Success "Total: $($response.data.Count) project(s)"
     }
     else {
-        Write-Error "Failed to get projects: $($response.error)"
+        Write-Err "Failed to get projects: $($response.error)"
     }
 }
 
@@ -265,7 +265,7 @@ function Get-SolutionOverview {
         Write-Host ""
     }
     else {
-        Write-Error "Failed to get overview: $($response.error)"
+        Write-Err "Failed to get overview: $($response.error)"
     }
 }
 
@@ -297,7 +297,7 @@ function Get-Instances {
         }
     }
     catch {
-        Write-Error "Failed to get instances: $_"
+        Write-Err "Failed to get instances: $_"
     }
 }
 
@@ -324,7 +324,7 @@ function Get-Health {
         Write-Host ""
     }
     catch {
-        Write-Error "Failed to check health: $_"
+        Write-Err "Failed to check health: $_"
     }
 }
 
@@ -347,6 +347,7 @@ try {
     }
 }
 catch {
-    Write-Error "Error: $_"
+    Write-Err "Error: $_"
     exit 1
 }
+
