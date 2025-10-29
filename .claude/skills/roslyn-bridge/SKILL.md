@@ -3,265 +3,216 @@ name: roslyn-bridge
 description: Use this for C# code analysis, querying .NET projects, finding symbols, getting diagnostics, or any Roslyn/semantic analysis tasks using the bridge server
 ---
 
-# Roslyn Bridge API Guide
+# Roslyn Bridge - C# Code Analysis
 
-Use this guide when accessing the Roslyn Bridge for C# code analysis.
+## CRITICAL RULES
+
+1. **ALWAYS USE THIS TOOL FIRST** - Never try to analyze C# code manually
+2. **ALWAYS CHECK HEALTH FIRST** - Run health check before any queries
+3. **ALWAYS USE solutionName PARAMETER** - Route to correct VS instance
+4. **NEVER GUESS** - Always query the API for actual information
+
+## Quick Start
+
+```bash
+# Step 1: Check what's running
+curl http://localhost:5001/api/instances
+
+# Step 2: Query with solution name
+curl "http://localhost:5001/api/roslyn/diagnostics/summary?solutionName=RoslynBridge"
+```
 
 ## Architecture
 
 ```
-┌─────────────┐      REST API       ┌────────────────────┐      HTTP      ┌─────────────────────┐
-│   Claude    │ ◄─────────────────► │  Web API (:5000)   │ ◄────────────► │  VS Plugin (:59123) │
-│     AI      │                     │    Middleware      │                │   Roslyn Bridge     │
-└─────────────┘                     └────────────────────┘                └─────────────────────┘
+Claude → WebAPI (:5001) → Correct VS Instance (auto-routed by solutionName)
 ```
 
-## Recommended: Web API (Port 5000)
+- WebAPI runs as Windows Service on port 5001
+- Multiple VS instances can be open (different ports: 59123, 59124, etc.)
+- WebAPI routes based on `solutionName` parameter
 
-**Base URL**: `http://localhost:5000`
+## Primary Method: Use query.ps1 Script
 
-The Web API provides a modern RESTful interface with:
-- Clean REST endpoints with query parameters
-- Full Swagger documentation at `/`
-- Request/response history tracking at `/api/history`
-- CORS support for web applications
-- Better error handling and logging
+**Location:** `C:\Users\AJ\Desktop\RoslynBridge\RoslynBridge.WebApi\query.ps1`
 
-### Web API Endpoints
+**Auto-detects solution from current directory - NO solutionName needed!**
 
-**Health & Info:**
-- `GET /api/health` - Check health of both Web API and VS plugin
-- `GET /api/health/ping` - Simple ping
+```powershell
+# Navigate to solution dir first
+cd C:\Users\AJ\Desktop\RoslynBridge
 
-**Roslyn Operations:**
-- `GET /api/roslyn/projects` - Get all projects
-- `GET /api/roslyn/solution/overview` - Solution statistics
-- `GET /api/roslyn/diagnostics?filePath={path}` - Get errors/warnings
-- `GET /api/roslyn/symbol?filePath={path}&line={line}&column={col}` - Get symbol info
-- `GET /api/roslyn/references?filePath={path}&line={line}&column={col}` - Find references
-- `GET /api/roslyn/symbol/search?symbolName={name}&kind={kind}` - Search symbols
-- `POST /api/roslyn/query` - Execute any query (fallback to raw queries)
-- `POST /api/roslyn/format` - Format document
-- `POST /api/roslyn/project/package/add` - Add NuGet package
-- `POST /api/roslyn/project/build` - Build project
+# Then run commands (auto-detects RoslynBridge)
+powershell -ExecutionPolicy Bypass -File "C:\Users\AJ\Desktop\RoslynBridge\RoslynBridge.WebApi\query.ps1" summary
+powershell -ExecutionPolicy Bypass -File "C:\Users\AJ\Desktop\RoslynBridge\RoslynBridge.WebApi\query.ps1" errors
+powershell -ExecutionPolicy Bypass -File "C:\Users\AJ\Desktop\RoslynBridge\RoslynBridge.WebApi\query.ps1" warnings
+powershell -ExecutionPolicy Bypass -File "C:\Users\AJ\Desktop\RoslynBridge\RoslynBridge.WebApi\query.ps1" projects
+powershell -ExecutionPolicy Bypass -File "C:\Users\AJ\Desktop\RoslynBridge\RoslynBridge.WebApi\query.ps1" overview
+powershell -ExecutionPolicy Bypass -File "C:\Users\AJ\Desktop\RoslynBridge\RoslynBridge.WebApi\query.ps1" instances
+powershell -ExecutionPolicy Bypass -File "C:\Users\AJ\Desktop\RoslynBridge\RoslynBridge.WebApi\query.ps1" health
 
-**History:**
-- `GET /api/history` - All history entries
-- `GET /api/history/{id}` - Specific entry
-- `GET /api/history/recent?count=50` - Recent entries
-- `GET /api/history/stats` - Statistics
-- `DELETE /api/history` - Clear history
+# Override if needed
+powershell -ExecutionPolicy Bypass -File "C:\Users\AJ\Desktop\RoslynBridge\RoslynBridge.WebApi\query.ps1" summary -SolutionName "CutFab"
+```
 
-## Alternative: Direct VS Plugin Access (Port 59123)
+**Available Commands:**
+- `summary` - Diagnostics count by severity (START HERE)
+- `errors` - All errors
+- `warnings` - All warnings
+- `diagnostics` - All diagnostics with details
+- `projects` - List projects
+- `overview` - Solution stats
+- `instances` - VS instances
+- `health` - Health check
 
-**Base URL**: `http://localhost:59123`
+## Fallback Method: curl with solutionName
 
-Direct access to the Visual Studio plugin (use only if Web API is unavailable):
-- **Endpoints**: `/query`, `/health`
-- **Method**: POST only
-- **Content-Type**: application/json
+**ALWAYS include `?solutionName=XXX` parameter!**
 
-## ⚠️ CRITICAL: Command Syntax Rules
-
-**ALWAYS use curl with the Bash tool. NEVER pipe curl output to PowerShell.**
-
-### ✅ CORRECT: Using Web API (Recommended)
+### Most Common Queries
 
 ```bash
-# Health check
-curl http://localhost:5000/api/health
+# 1. Check what VS instances are registered
+curl http://localhost:5001/api/instances
 
-# Get all projects (returns full file paths)
-curl http://localhost:5000/api/roslyn/projects
+# 2. Get diagnostics summary (errors/warnings count)
+curl "http://localhost:5001/api/roslyn/diagnostics/summary?solutionName=RoslynBridge"
 
-# Get solution overview
-curl http://localhost:5000/api/roslyn/solution/overview
+# 3. Get all errors only
+curl "http://localhost:5001/api/roslyn/diagnostics?solutionName=RoslynBridge&severity=error"
 
-# Get diagnostics for entire solution
-curl http://localhost:5000/api/roslyn/diagnostics
+# 4. Get all warnings only
+curl "http://localhost:5001/api/roslyn/diagnostics?solutionName=RoslynBridge&severity=warning"
 
-# Get diagnostics for specific file
-curl "http://localhost:5000/api/roslyn/diagnostics?filePath=C:/path/to/file.cs"
+# 5. Get all diagnostics with details
+curl "http://localhost:5001/api/roslyn/diagnostics?solutionName=RoslynBridge"
 
-# Get symbol at position (use paths from /projects response)
-curl "http://localhost:5000/api/roslyn/symbol?filePath=C:/path/to/file.cs&line=10&column=5"
+# 6. List all projects
+curl "http://localhost:5001/api/roslyn/projects?solutionName=RoslynBridge"
+
+# 7. Get solution overview
+curl "http://localhost:5001/api/roslyn/solution/overview?solutionName=RoslynBridge"
+```
+
+### Symbol Queries
+
+```bash
+# Find symbol by name
+curl "http://localhost:5001/api/roslyn/symbol/search?solutionName=RoslynBridge&symbolName=ClassName"
+
+# Get symbol at specific location
+curl "http://localhost:5001/api/roslyn/symbol?solutionName=RoslynBridge&filePath=C:/Full/Path/File.cs&line=10&column=5"
 
 # Find all references
-curl "http://localhost:5000/api/roslyn/references?filePath=C:/path/to/file.cs&line=18&column=30"
-
-# Search for symbols
-curl "http://localhost:5000/api/roslyn/symbol/search?symbolName=MyClass&kind=class"
-
-# Get recent history
-curl http://localhost:5000/api/history/recent?count=10
-
-# Get history statistics
-curl http://localhost:5000/api/history/stats
+curl "http://localhost:5001/api/roslyn/references?solutionName=RoslynBridge&filePath=C:/Full/Path/File.cs&line=10&column=5"
 ```
 
-**IMPORTANT curl syntax rules:**
-- For GET requests, no `-X GET` needed
-- Use quotes around URLs with query parameters
-- Forward slashes `/` work in file paths (Windows accepts both `/` and `\`)
-- **DO NOT pipe to PowerShell** - the JSON output is already formatted
-
-### Using Direct VS Plugin Access (Fallback)
+### Multi-Solution
 
 ```bash
-# Health check - verify VS plugin is running
-curl -X POST http://localhost:59123/health -H "Content-Type: application/json" -d "{}"
+# Query RoslynBridge
+curl "http://localhost:5001/api/roslyn/diagnostics/summary?solutionName=RoslynBridge"
 
-# Get projects via POST
-curl -X POST http://localhost:59123/query -H "Content-Type: application/json" -d "{\"queryType\":\"getprojects\"}"
-
-# Get symbol at position
-curl -X POST http://localhost:59123/query -H "Content-Type: application/json" -d "{\"queryType\":\"getsymbol\",\"filePath\":\"C:\\\\path\\\\to\\\\file.cs\",\"line\":10,\"column\":5}"
+# Query CutFab
+curl "http://localhost:5001/api/roslyn/diagnostics/summary?solutionName=CutFab"
 ```
 
-**Note:** In POST requests to VS plugin, escape backslashes: `\\\\` becomes `\\` in JSON
+## All API Endpoints
 
-## Quick Reference: All Endpoints
+**All support `?solutionName=XXX` parameter**
 
-### Query Endpoints
+### Diagnostics
+- `/api/roslyn/diagnostics/summary?solutionName=X` - Count by severity
+- `/api/roslyn/diagnostics?solutionName=X` - All diagnostics
+- `/api/roslyn/diagnostics?solutionName=X&severity=error` - Only errors
+- `/api/roslyn/diagnostics?solutionName=X&severity=warning` - Only warnings
+- `/api/roslyn/diagnostics?solutionName=X&filePath=C:/path/file.cs` - File-specific
 
-| Endpoint | Required Fields | Optional Fields | Description |
-|----------|----------------|-----------------|-------------|
-| `getprojects` | - | - | Get all projects in the solution |
-| `getdocument` | `filePath` | - | Get document information for a specific file |
-| `getsymbol` | `filePath`, `line`, `column` | - | Get symbol information at a specific position |
-| `getsemanticmodel` | `filePath` | - | Verify semantic model availability (not serializable) |
-| `getsyntaxtree` | `filePath` | - | Get the syntax tree (source code) for a file |
-| `getdiagnostics` | - | `filePath` | Get compilation errors and warnings |
-| `findreferences` | `filePath`, `line`, `column` | - | Find all references to a symbol |
-| `findsymbol` | `symbolName` | `parameters.kind` | Find symbols by name (supports filtering by kind) |
-| `gettypemembers` | `symbolName` | `parameters.includeInherited` | Get all members of a type |
-| `gettypehierarchy` | `symbolName` | `parameters.direction` | Get base types or derived types |
-| `findimplementations` | `symbolName` OR `filePath`+`line`+`column` | - | Find implementations of an interface/abstract member |
-| `getnamespacetypes` | `symbolName` | - | Get all types in a namespace |
-| `getcallhierarchy` | `filePath`, `line`, `column` | `parameters.direction` | Get callers or callees of a method |
-| `getsolutionoverview` | - | - | Get high-level solution statistics |
-| `getsymbolcontext` | `filePath`, `line`, `column` | - | Get contextual information about a symbol's location |
-| `searchcode` | `symbolName` (regex) | `parameters.scope` | Search for code patterns using regex |
+### Projects & Solution
+- `/api/roslyn/projects?solutionName=X` - All projects with file paths
+- `/api/roslyn/solution/overview?solutionName=X` - Solution statistics
 
-### Editing Endpoints
+### Symbols
+- `/api/roslyn/symbol/search?solutionName=X&symbolName=Y` - Find symbol by name
+- `/api/roslyn/symbol?solutionName=X&filePath=Z&line=N&column=M` - Symbol at location
+- `/api/roslyn/references?solutionName=X&filePath=Z&line=N&column=M` - Find references
 
-| Endpoint | Required Fields | Optional Fields | Description |
-|----------|----------------|-----------------|-------------|
-| `formatdocument` | `filePath` | - | Format a document according to coding style |
-| `organizeusings` | `filePath` | - | Sort and remove unused using statements |
-| `renamesymbol` | `filePath`, `line`, `column`, `parameters.newName` | - | Rename a symbol across the solution |
-| `addmissingusing` | `filePath`, `line`, `column` | - | Add missing using statement for a symbol |
-| `applycodefix` | `filePath`, `line`, `column` | - | Apply available code fixes at a position |
+### Project Operations
+- `POST /api/roslyn/project/build?solutionName=X&projectName=Y` - Build project
+- `POST /api/roslyn/project/package/add?solutionName=X&projectName=Y&packageName=Z` - Add package
 
-### Project Operation Endpoints
+### Instances & Health
+- `/api/instances` - List all VS instances with solutions
+- `/api/health` - Health check
 
-| Endpoint | Required Fields | Optional Fields | Description |
-|----------|----------------|-----------------|-------------|
-| `addnugetpackage` | `projectName`, `packageName` | `version` | Add a NuGet package to a project |
-| `removenugetpackage` | `projectName`, `packageName` | - | Remove a NuGet package from a project |
-| `buildproject` | `projectName` | `configuration` | Build a project or solution |
-| `cleanproject` | `projectName` | - | Clean build output |
-| `restorepackages` | `projectName` | - | Restore NuGet packages |
-| `createdirectory` | `directoryPath` | - | Create a new directory |
+## Workflow Pattern
 
-## Common Workflow Examples
-
-### Typical Code Analysis Workflow
+**ALWAYS follow this order:**
 
 ```bash
-# Step 1: Check if services are healthy
-curl http://localhost:5000/api/health
+# 1. Check instances
+curl http://localhost:5001/api/instances
 
-# Step 2: Get all projects and their files
-curl http://localhost:5000/api/roslyn/projects
-# Response includes: {"data": [{"documents": ["C:/Full/Path/To/File.cs", ...]}]}
+# 2. Get diagnostics summary
+curl "http://localhost:5001/api/roslyn/diagnostics/summary?solutionName=RoslynBridge"
 
-# Step 3: Use the full paths from Step 2 in subsequent queries
-FILE="C:/Users/AJ/Desktop/MyProject/Program.cs"
+# 3. If errors exist, get details
+curl "http://localhost:5001/api/roslyn/diagnostics?solutionName=RoslynBridge&severity=error"
 
-# Get diagnostics (errors/warnings) for a file
-curl "http://localhost:5000/api/roslyn/diagnostics?filePath=$FILE"
+# 4. If need file paths, get projects
+curl "http://localhost:5001/api/roslyn/projects?solutionName=RoslynBridge"
 
-# Get symbol information at a specific location
-curl "http://localhost:5000/api/roslyn/symbol?filePath=$FILE&line=15&column=10"
-
-# Find all references to that symbol
-curl "http://localhost:5000/api/roslyn/references?filePath=$FILE&line=15&column=10"
-
-# Step 4: View your query history
-curl http://localhost:5000/api/history/recent?count=5
-
-# Step 5: Get statistics about your queries
-curl http://localhost:5000/api/history/stats
-```
-
-### Advanced Query Examples
-
-```bash
-# Search for all classes with "Service" in the name
-curl "http://localhost:5000/api/roslyn/symbol/search?symbolName=Service&kind=class"
-
-# Get solution-wide statistics
-curl http://localhost:5000/api/roslyn/solution/overview
-
-# For complex queries not available as REST endpoints, use POST /query
-curl -X POST http://localhost:5000/api/roslyn/query \
-  -H "Content-Type: application/json" \
-  -d '{"queryType":"searchcode","symbolName":".*Controller","parameters":{"scope":"classes"}}'
-
-# Build a project
-curl -X POST "http://localhost:5000/api/roslyn/project/build?projectName=MyProject"
-
-# Add NuGet package
-curl -X POST "http://localhost:5000/api/roslyn/project/package/add?projectName=MyProject&packageName=Newtonsoft.Json&version=13.0.3"
-```
-
-## Response Format
-
-All endpoints return JSON in this format:
-
-**Success:**
-```json
-{
-  "success": true,
-  "message": "Optional message",
-  "data": { /* Response data varies by endpoint */ },
-  "error": null
-}
-```
-
-**Error:**
-```json
-{
-  "success": false,
-  "message": null,
-  "data": null,
-  "error": "Error description"
-}
+# 5. Query specific symbols/references as needed
+curl "http://localhost:5001/api/roslyn/symbol/search?solutionName=RoslynBridge&symbolName=X"
 ```
 
 ## Important Notes
 
-- Line numbers are **1-based** (first line is 1)
-- Column numbers are **0-based** (first column is 0)
-- **Use full paths from `/api/roslyn/projects` response** in other endpoints
-- Forward slashes `/` work in file paths (Windows accepts both `/` and `\`)
-- Both the Web API (port 5000) and VS Plugin (port 59123) must be running
-- All workspace modifications use VS threading model
-- Request history is automatically tracked in the Web API
+- Line numbers are 1-based (first line = 1)
+- Column numbers are 0-based (first column = 0)
+- File paths must be absolute/full paths
+- Get file paths from `/api/roslyn/projects` response
+- WebAPI service: `Start-Service RoslynBridgeWebApi` / `Stop-Service RoslynBridgeWebApi`
 
 ## Troubleshooting
 
-**"Failed to connect" error:**
-1. Check if Web API is running: `curl http://localhost:5000/api/health/ping`
-2. Check if VS Plugin is running: `curl -X POST http://localhost:59123/health -H "Content-Type: application/json" -d "{}"`
-3. Ensure Visual Studio is open with a solution loaded
+### No Instances
+```bash
+curl http://localhost:5001/api/instances
+```
+If empty:
+- Visual Studio not running
+- RoslynBridge extension not installed
+- No solution open
+- Wait 60 seconds for heartbeat
 
-**"vsPluginStatus": "Disconnected":**
-- The VS Plugin (port 59123) is not running
-- Open Visual Studio and ensure the RoslynBridge extension is loaded
+### Wrong Solution
+Always check instances and use correct solutionName:
+```bash
+curl http://localhost:5001/api/instances
+# Use exact solutionName from response
+```
 
-**Empty or null data:**
-- Ensure you're using the correct file paths from `/api/roslyn/projects`
-- Verify line/column numbers are within the file bounds
-- Check that the file is part of the currently open VS solution
+### Service Not Running
+```bash
+curl http://localhost:5001/api/health/ping
+```
+If fails:
+- Service not running: `Start-Service RoslynBridgeWebApi`
+- Check service status: `Get-Service RoslynBridgeWebApi`
+
+## DO NOT
+
+- ❌ Try to analyze C# code manually
+- ❌ Guess about errors or warnings
+- ❌ Use file paths without querying projects first
+- ❌ Omit solutionName parameter (except /api/instances)
+- ❌ Query VS plugin directly (port 59123) - use WebAPI
+
+## DO
+
+- ✅ Always check /api/instances first
+- ✅ Always use solutionName parameter
+- ✅ Use query.ps1 when possible (auto-detects solution)
+- ✅ Get actual diagnostics from API
+- ✅ Use full file paths from /projects response
