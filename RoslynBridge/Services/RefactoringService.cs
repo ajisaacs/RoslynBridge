@@ -1,3 +1,4 @@
+#nullable enable
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -26,7 +27,7 @@ namespace RoslynBridge.Services
                 return new QueryResponse { Success = false, Error = "FilePath is required" };
             }
 
-            var document = FindDocument(request.FilePath);
+            var document = FindDocument(request.FilePath!);
 
             if (document == null)
             {
@@ -62,7 +63,7 @@ namespace RoslynBridge.Services
                 return new QueryResponse { Success = false, Error = "FilePath is required" };
             }
 
-            var document = FindDocument(request.FilePath);
+            var document = FindDocument(request.FilePath!);
 
             if (document == null)
             {
@@ -129,7 +130,7 @@ namespace RoslynBridge.Services
                 return new QueryResponse { Success = false, Error = "newName parameter is required" };
             }
 
-            var document = FindDocument(request.FilePath);
+            var document = FindDocument(request.FilePath!);
 
             if (document == null)
             {
@@ -141,6 +142,12 @@ namespace RoslynBridge.Services
             var sourceText = await document.GetTextAsync();
             var position = sourceText.Lines[request.Line.Value - 1].Start + request.Column.Value;
             var node = syntaxRoot?.FindToken(position).Parent;
+
+            if (node == null)
+            {
+                return new QueryResponse { Success = false, Error = "Syntax node not found at specified position" };
+            }
+
             var symbol = semanticModel?.GetSymbolInfo(node).Symbol;
 
             if (symbol == null)
@@ -150,11 +157,13 @@ namespace RoslynBridge.Services
 
             try
             {
+                // Use the new RenameOptions API instead of deprecated OptionSet
+                var renameOptions = new Microsoft.CodeAnalysis.Rename.SymbolRenameOptions();
                 var newSolution = await Renamer.RenameSymbolAsync(
                     document.Project.Solution,
                     symbol,
-                    newName,
-                    document.Project.Solution.Workspace.Options
+                    renameOptions,
+                    newName!
                 );
 
                 var changes = newSolution.GetChanges(document.Project.Solution);
@@ -211,7 +220,7 @@ namespace RoslynBridge.Services
                 return new QueryResponse { Success = false, Error = "FilePath, Line, and Column are required" };
             }
 
-            var document = FindDocument(request.FilePath);
+            var document = FindDocument(request.FilePath!);
 
             if (document == null)
             {
@@ -293,7 +302,7 @@ namespace RoslynBridge.Services
                 return new QueryResponse { Success = false, Error = "FilePath, Line, and Column are required" };
             }
 
-            var document = FindDocument(request.FilePath);
+            var document = FindDocument(request.FilePath!);
 
             if (document == null)
             {
