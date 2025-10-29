@@ -19,7 +19,9 @@ namespace RoslynBridge.Services
         private readonly int _port;
         private readonly AsyncPackage _package;
         private System.Threading.Timer? _heartbeatTimer;
+        private System.Threading.Timer? _registrationRetryTimer;
         private bool _isRegistered;
+        private static readonly TimeSpan InitialRegistrationRetryInterval = TimeSpan.FromSeconds(5);
 
         public RegistrationService(AsyncPackage package, int port)
         {
@@ -67,17 +69,46 @@ namespace RoslynBridge.Services
                         null,
                         heartbeatInterval,
                         heartbeatInterval);
+
+                    // Stop any pending registration retries now that we're registered
+                    _registrationRetryTimer?.Dispose();
+                    _registrationRetryTimer = null;
                 }
                 else
                 {
                     Debug.WriteLine($"Failed to register with WebAPI: {response.StatusCode}");
+                    // Increase retry frequency until registration succeeds
+                    EnsureRegistrationRetryTimer();
                 }
             }
             catch (Exception ex)
             {
                 Debug.WriteLine($"Error registering with WebAPI: {ex.Message}");
                 // Don't throw - registration is optional, VS extension should work standalone
+                // But keep retrying registration at a higher frequency until it succeeds
+                EnsureRegistrationRetryTimer();
             }
+        }
+
+        private void EnsureRegistrationRetryTimer()
+        {
+            if (_registrationRetryTimer != null)
+                return;
+
+            _registrationRetryTimer = new System.Threading.Timer(
+                async _ =>
+                {
+                    if (_isRegistered)
+                    {
+                        _registrationRetryTimer?.Dispose();
+                        _registrationRetryTimer = null;
+                        return;
+                    }
+                    try { await RegisterAsync(); } catch { /* swallow */ }
+                },
+                null,
+                dueTime: InitialRegistrationRetryInterval,
+                period: InitialRegistrationRetryInterval);
         }
 
         private async Task SendHeartbeatAsync()
@@ -121,6 +152,7 @@ namespace RoslynBridge.Services
                     {
                         Debug.WriteLine("Instance not found, re-registering...");
                         _isRegistered = false;
+                        EnsureRegistrationRetryTimer();
                         await RegisterAsync();
                     }
                 }
@@ -132,6 +164,7 @@ namespace RoslynBridge.Services
                 _isRegistered = false;
                 try
                 {
+                    EnsureRegistrationRetryTimer();
                     await RegisterAsync();
                 }
                 catch
@@ -228,6 +261,7 @@ namespace RoslynBridge.Services
         public void Dispose()
         {
             _heartbeatTimer?.Dispose();
+            _registrationRetryTimer?.Dispose();
             _httpClient?.Dispose();
         }
     }

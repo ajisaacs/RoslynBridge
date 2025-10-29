@@ -255,6 +255,15 @@ namespace RoslynBridge.Services
                     if (node != null && semanticModel != null)
                     {
                         targetSymbol = semanticModel.GetSymbolInfo(node).Symbol;
+                        if (targetSymbol == null)
+                        {
+                            var declNode = node;
+                            while (declNode != null && targetSymbol == null)
+                            {
+                                targetSymbol = semanticModel.GetDeclaredSymbol(declNode);
+                                declNode = declNode.Parent;
+                            }
+                        }
                     }
                 }
             }
@@ -312,6 +321,15 @@ namespace RoslynBridge.Services
             }
 
             var symbol = semanticModel.GetSymbolInfo(node).Symbol;
+            if (symbol == null)
+            {
+                var declNode = node;
+                while (declNode != null && symbol == null)
+                {
+                    symbol = semanticModel.GetDeclaredSymbol(declNode);
+                    declNode = declNode.Parent;
+                }
+            }
 
             if (symbol == null)
             {
@@ -384,6 +402,15 @@ namespace RoslynBridge.Services
             }
 
             var symbol = semanticModel.GetSymbolInfo(node).Symbol;
+            if (symbol == null)
+            {
+                var declNode = node;
+                while (declNode != null && symbol == null)
+                {
+                    symbol = semanticModel.GetDeclaredSymbol(declNode);
+                    declNode = declNode.Parent;
+                }
+            }
             var containingMethod = node.AncestorsAndSelf().OfType<MethodDeclarationSyntax>().FirstOrDefault();
             var containingClass = node.AncestorsAndSelf().OfType<ClassDeclarationSyntax>().FirstOrDefault();
 
@@ -397,16 +424,24 @@ namespace RoslynBridge.Services
                 Parameters = new List<string>()
             };
 
-            // Get local variables
+            // Get local variables and parameters
             if (containingMethod != null)
             {
-                var dataFlow = semanticModel.AnalyzeDataFlow(containingMethod);
-                if (dataFlow.Succeeded)
+                DataFlowAnalysis? dataFlow = null;
+                if (containingMethod.Body != null)
+                {
+                    dataFlow = semanticModel.AnalyzeDataFlow(containingMethod.Body);
+                }
+                else if (containingMethod.ExpressionBody != null)
+                {
+                    dataFlow = semanticModel.AnalyzeDataFlow(containingMethod.ExpressionBody.Expression);
+                }
+
+                if (dataFlow != null && dataFlow.Succeeded)
                 {
                     context.LocalVariables = dataFlow.VariablesDeclared.Select(v => v.Name).ToList();
                 }
 
-                // Get parameters
                 var methodSymbol = semanticModel.GetDeclaredSymbol(containingMethod) as IMethodSymbol;
                 if (methodSymbol != null)
                 {

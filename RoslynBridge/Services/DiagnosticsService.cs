@@ -60,9 +60,8 @@ namespace RoslynBridge.Services
                 return new QueryResponse { Success = false, Error = "FilePath, Line, and Column are required" };
             }
 
-            var document = Workspace?.CurrentSolution.Projects
-                .SelectMany(p => p.Documents)
-                .FirstOrDefault(d => d.FilePath?.Equals(request.FilePath, StringComparison.OrdinalIgnoreCase) == true);
+            // Use shared path resolution to reliably locate documents
+            var document = FindDocument(request.FilePath!);
 
             if (document == null)
             {
@@ -87,6 +86,18 @@ namespace RoslynBridge.Services
             }
 
             var symbol = semanticModel.GetSymbolInfo(node).Symbol;
+
+            // Fallback: if positioned on a declaration (class, method, etc.),
+            // resolve via GetDeclaredSymbol walking up the ancestor chain.
+            if (symbol == null)
+            {
+                var declNode = node;
+                while (declNode != null && symbol == null)
+                {
+                    symbol = semanticModel.GetDeclaredSymbol(declNode);
+                    declNode = declNode.Parent;
+                }
+            }
 
             if (symbol == null)
             {

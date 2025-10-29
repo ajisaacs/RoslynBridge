@@ -149,6 +149,15 @@ namespace RoslynBridge.Services
             }
 
             var symbol = semanticModel?.GetSymbolInfo(node).Symbol;
+            if (symbol == null && semanticModel != null)
+            {
+                var declNode = node;
+                while (declNode != null && symbol == null)
+                {
+                    symbol = semanticModel.GetDeclaredSymbol(declNode);
+                    declNode = declNode.Parent;
+                }
+            }
 
             if (symbol == null)
             {
