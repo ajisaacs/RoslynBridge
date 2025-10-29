@@ -1,3 +1,4 @@
+#nullable enable
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -24,7 +25,7 @@ namespace RoslynBridge.Services
                 return CreateErrorResponse("FilePath is required");
             }
 
-            var document = FindDocument(request.FilePath);
+            var document = FindDocument(request.FilePath!);
 
             if (document == null)
             {
@@ -124,8 +125,8 @@ namespace RoslynBridge.Services
                 var compilation = await project.GetCompilationAsync();
                 if (compilation == null) continue;
 
-                var typeSymbol = compilation.GetTypeByMetadataName(request.SymbolName) ??
-                                 compilation.GetSymbolsWithName(request.SymbolName, SymbolFilter.Type).FirstOrDefault() as INamedTypeSymbol;
+                var typeSymbol = compilation.GetTypeByMetadataName(request.SymbolName!) ??
+                                 compilation.GetSymbolsWithName(request.SymbolName!, SymbolFilter.Type).FirstOrDefault() as INamedTypeSymbol;
 
                 if (typeSymbol != null)
                 {
@@ -173,8 +174,8 @@ namespace RoslynBridge.Services
                 var compilation = await project.GetCompilationAsync();
                 if (compilation == null) continue;
 
-                var typeSymbol = compilation.GetTypeByMetadataName(request.SymbolName) ??
-                                 compilation.GetSymbolsWithName(request.SymbolName, SymbolFilter.Type).FirstOrDefault() as INamedTypeSymbol;
+                var typeSymbol = compilation.GetTypeByMetadataName(request.SymbolName!) ??
+                                 compilation.GetSymbolsWithName(request.SymbolName!, SymbolFilter.Type).FirstOrDefault() as INamedTypeSymbol;
 
                 if (typeSymbol != null)
                 {
@@ -201,6 +202,10 @@ namespace RoslynBridge.Services
                     // Get derived types
                     if (direction == "down" || direction == "both")
                     {
+                        if (Workspace?.CurrentSolution == null)
+                        {
+                            return CreateErrorResponse("Workspace not available");
+                        }
                         var derivedTypes = await SymbolFinder.FindDerivedClassesAsync(typeSymbol, Workspace.CurrentSolution, true);
                         hierarchy.DerivedTypes = derivedTypes.Select(t => t.ToDisplayString()).ToList();
                     }
@@ -229,15 +234,15 @@ namespace RoslynBridge.Services
                     var compilation = await project.GetCompilationAsync();
                     if (compilation == null) continue;
 
-                    targetSymbol = compilation.GetTypeByMetadataName(request.SymbolName) ??
-                                   compilation.GetSymbolsWithName(request.SymbolName, SymbolFilter.Type).FirstOrDefault();
+                    targetSymbol = compilation.GetTypeByMetadataName(request.SymbolName!) ??
+                                   compilation.GetSymbolsWithName(request.SymbolName!, SymbolFilter.Type).FirstOrDefault();
                     if (targetSymbol != null) break;
                 }
             }
             // Find by location
             else if (!string.IsNullOrEmpty(request.FilePath) && request.Line.HasValue && request.Column.HasValue)
             {
-                var document = FindDocument(request.FilePath);
+                var document = FindDocument(request.FilePath!);
 
                 if (document != null)
                 {
@@ -246,7 +251,11 @@ namespace RoslynBridge.Services
                     var sourceText = await document.GetTextAsync();
                     var position = sourceText.Lines[request.Line.Value - 1].Start + request.Column.Value;
                     var node = syntaxRoot?.FindToken(position).Parent;
-                    targetSymbol = semanticModel?.GetSymbolInfo(node).Symbol;
+
+                    if (node != null && semanticModel != null)
+                    {
+                        targetSymbol = semanticModel.GetSymbolInfo(node).Symbol;
+                    }
                 }
             }
 
@@ -259,6 +268,10 @@ namespace RoslynBridge.Services
 
             if (targetSymbol is INamedTypeSymbol namedType && (namedType.TypeKind == TypeKind.Interface || namedType.IsAbstract))
             {
+                if (Workspace?.CurrentSolution == null)
+                {
+                    return CreateErrorResponse("Workspace not available");
+                }
                 var implementers = await SymbolFinder.FindImplementationsAsync(namedType, Workspace.CurrentSolution);
                 foreach (var impl in implementers)
                 {
@@ -280,7 +293,7 @@ namespace RoslynBridge.Services
             request.Parameters?.TryGetValue("direction", out direction);
             direction = direction ?? "callers";
 
-            var document = FindDocument(request.FilePath);
+            var document = FindDocument(request.FilePath!);
 
             if (document == null)
             {
@@ -292,11 +305,22 @@ namespace RoslynBridge.Services
             var sourceText = await document.GetTextAsync();
             var position = sourceText.Lines[request.Line.Value - 1].Start + request.Column.Value;
             var node = syntaxRoot?.FindToken(position).Parent;
-            var symbol = semanticModel?.GetSymbolInfo(node).Symbol;
+
+            if (node == null || semanticModel == null)
+            {
+                return CreateErrorResponse("Syntax node not found at specified position");
+            }
+
+            var symbol = semanticModel.GetSymbolInfo(node).Symbol;
 
             if (symbol == null)
             {
                 return CreateErrorResponse("Symbol not found");
+            }
+
+            if (Workspace?.CurrentSolution == null)
+            {
+                return CreateErrorResponse("Workspace not available");
             }
 
             var calls = new List<CallInfo>();
@@ -341,7 +365,7 @@ namespace RoslynBridge.Services
                 return CreateErrorResponse("FilePath, Line, and Column are required");
             }
 
-            var document = FindDocument(request.FilePath);
+            var document = FindDocument(request.FilePath!);
 
             if (document == null)
             {
@@ -367,7 +391,7 @@ namespace RoslynBridge.Services
             {
                 ContainingClass = containingClass?.Identifier.Text,
                 ContainingMethod = containingMethod?.Identifier.Text,
-                ContainingNamespace = semanticModel.GetDeclaredSymbol(containingClass)?.ContainingNamespace?.ToDisplayString(),
+                ContainingNamespace = containingClass != null ? semanticModel.GetDeclaredSymbol(containingClass)?.ContainingNamespace?.ToDisplayString() : null,
                 SymbolAtPosition = symbol?.ToDisplayString(),
                 LocalVariables = new List<string>(),
                 Parameters = new List<string>()
