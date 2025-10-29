@@ -70,14 +70,35 @@ public class InstancesController : ControllerBase
     }
 
     /// <summary>
-    /// Update heartbeat for a Visual Studio instance
+    /// Update heartbeat for a Visual Studio instance (with full instance info update)
+    /// </summary>
+    /// <param name="instance">Updated instance information</param>
+    /// <returns>Heartbeat update result</returns>
+    [HttpPost("heartbeat")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public IActionResult Heartbeat([FromBody] VSInstanceInfo instance)
+    {
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(ModelState);
+        }
+
+        // Register/update the instance with current info
+        _registryService.Register(instance);
+
+        return Ok(new { success = true, message = "Heartbeat updated" });
+    }
+
+    /// <summary>
+    /// Update heartbeat for a Visual Studio instance (legacy endpoint)
     /// </summary>
     /// <param name="processId">Process ID of the instance</param>
     /// <returns>Heartbeat update result</returns>
     [HttpPost("heartbeat/{processId}")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public IActionResult Heartbeat(int processId)
+    public IActionResult HeartbeatById(int processId)
     {
         var updated = _registryService.UpdateHeartbeat(processId);
 

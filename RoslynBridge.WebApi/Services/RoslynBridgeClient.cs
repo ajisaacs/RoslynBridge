@@ -32,11 +32,12 @@ public class RoslynBridgeClient : IRoslynBridgeClient
     public async Task<RoslynQueryResponse> ExecuteQueryAsync(
         RoslynQueryRequest request,
         int? instancePort = null,
+        string? solutionName = null,
         CancellationToken cancellationToken = default)
     {
         try
         {
-            var targetPort = await ResolveInstancePortAsync(instancePort, request);
+            var targetPort = await ResolveInstancePortAsync(instancePort, request, solutionName);
 
             if (targetPort == null)
             {
@@ -131,12 +132,29 @@ public class RoslynBridgeClient : IRoslynBridgeClient
     /// <summary>
     /// Resolves which VS instance port to use based on provided hints
     /// </summary>
-    private Task<int?> ResolveInstancePortAsync(int? explicitPort, RoslynQueryRequest? request)
+    private Task<int?> ResolveInstancePortAsync(int? explicitPort, RoslynQueryRequest? request, string? solutionName = null)
     {
         // If explicit port specified, use it
         if (explicitPort.HasValue)
         {
             return Task.FromResult<int?>(explicitPort.Value);
+        }
+
+        // Try to find instance by solution name
+        if (!string.IsNullOrEmpty(solutionName))
+        {
+            var matchedInstances = _registryService.GetAllInstances()
+                .Where(i => i.SolutionName != null &&
+                           i.SolutionName.Equals(solutionName, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            if (matchedInstances.Any())
+            {
+                _logger.LogDebug("Found instance by solution name: {SolutionName}, Port: {Port}", solutionName, matchedInstances[0].Port);
+                return Task.FromResult<int?>(matchedInstances[0].Port);
+            }
+
+            _logger.LogWarning("No instance found for solution: {SolutionName}", solutionName);
         }
 
         // Try to find instance by solution path from request
@@ -161,11 +179,11 @@ public class RoslynBridgeClient : IRoslynBridgeClient
         }
 
         // Fall back to first available instance
-        var instances = _registryService.GetAllInstances().ToList();
-        if (instances.Any())
+        var allInstances = _registryService.GetAllInstances().ToList();
+        if (allInstances.Any())
         {
-            _logger.LogDebug("Using first available instance: port {Port}", instances[0].Port);
-            return Task.FromResult<int?>(instances[0].Port);
+            _logger.LogDebug("Using first available instance: port {Port}", allInstances[0].Port);
+            return Task.FromResult<int?>(allInstances[0].Port);
         }
 
         _logger.LogWarning("No Visual Studio instances registered");

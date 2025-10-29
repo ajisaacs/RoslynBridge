@@ -1,6 +1,8 @@
+using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.OpenApi.Models;
 using RoslynBridge.WebApi.Middleware;
 using RoslynBridge.WebApi.Services;
+using System.IO.Compression;
 using System.Reflection;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -24,6 +26,24 @@ builder.Services.AddCors(options =>
 
 // Add controllers
 builder.Services.AddControllers();
+
+// Configure response compression for reduced bandwidth usage
+builder.Services.AddResponseCompression(options =>
+{
+    options.EnableForHttps = true;
+    options.Providers.Add<BrotliCompressionProvider>();
+    options.Providers.Add<GzipCompressionProvider>();
+});
+
+builder.Services.Configure<BrotliCompressionProviderOptions>(options =>
+{
+    options.Level = CompressionLevel.Fastest;
+});
+
+builder.Services.Configure<GzipCompressionProviderOptions>(options =>
+{
+    options.Level = CompressionLevel.Fastest;
+});
 
 // Register history service as singleton for in-memory storage
 builder.Services.AddSingleton<IHistoryService, HistoryService>();
@@ -93,6 +113,9 @@ if (app.Environment.IsDevelopment())
 {
     app.UseDeveloperExceptionPage();
 }
+
+// Enable response compression (should be early in pipeline)
+app.UseResponseCompression();
 
 // Enable Swagger in all environments for easy access
 app.UseSwagger();
