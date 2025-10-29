@@ -9,7 +9,7 @@ public class HealthCheckResponse
     /// Overall health status
     /// </summary>
     public string Status { get; set; } = "Healthy";
-
+    
     /// <summary>
     /// Web API service status
     /// </summary>
