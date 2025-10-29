@@ -110,6 +110,8 @@ public class RoslynController : ControllerBase
     public async Task<ActionResult<RoslynQueryResponse>> GetDiagnostics(
         [FromQuery] string? filePath = null,
         [FromQuery] string? severity = null,
+        [FromQuery] int? limit = null,
+        [FromQuery] int? offset = null,
         [FromQuery] int? instancePort = null,
         [FromQuery] string? solutionName = null,
         CancellationToken cancellationToken = default)
@@ -132,6 +134,12 @@ public class RoslynController : ControllerBase
         if (!string.IsNullOrEmpty(severity) && result.Success && result.Data != null)
         {
             result = FilterDiagnosticsBySeverity(result, severity);
+        }
+
+        // Apply pagination if requested (limit and/or offset)
+        if (result.Success && result.Data != null && (limit.HasValue || offset.HasValue))
+        {
+            result = ApplyPagination(result, offset ?? 0, limit);
         }
 
         return Ok(result);
@@ -302,6 +310,109 @@ public class RoslynController : ControllerBase
                 Success = true,
                 Data = filtered,
                 Message = $"Filtered to {filtered.Count} diagnostic(s)"
+            };
+        }
+
+        return response;
+    }
+
+    private RoslynQueryResponse ApplyLimit(RoslynQueryResponse response, int limit)
+    {
+        if (response.Data is System.Text.Json.JsonElement jsonElement && jsonElement.ValueKind == System.Text.Json.JsonValueKind.Array)
+        {
+            var total = jsonElement.GetArrayLength();
+            if (total <= limit)
+            {
+                return response;
+            }
+
+            var limited = new List<System.Text.Json.JsonElement>(capacity: limit);
+            int i = 0;
+            foreach (var item in jsonElement.EnumerateArray())
+            {
+                if (i++ >= limit) break;
+                limited.Add(item);
+            }
+
+            return new RoslynQueryResponse
+            {
+                Success = true,
+                Data = limited,
+                Message = $"Truncated to {limit} of {total} diagnostic(s)"
+            };
+        }
+
+        if (response.Data is System.Collections.IEnumerable enumerable and not string)
+        {
+            var list = new List<object>();
+            int total = 0;
+            foreach (var item in enumerable)
+            {
+                if (total < limit)
+                {
+                    list.Add(item!);
+                }
+                total++;
+            }
+
+            if (total <= limit)
+            {
+                return response;
+            }
+
+            return new RoslynQueryResponse
+            {
+                Success = true,
+                Data = list,
+                Message = $"Truncated to {limit} of {total} diagnostic(s)"
+            };
+        }
+
+        return response;
+    }
+
+    private RoslynQueryResponse ApplyPagination(RoslynQueryResponse response, int offset, int? limit)
+    {
+        if (offset < 0)
+        {
+            offset = 0;
+        }
+
+        if (response.Data is System.Text.Json.JsonElement jsonElement && jsonElement.ValueKind == System.Text.Json.JsonValueKind.Array)
+        {
+            var total = jsonElement.GetArrayLength();
+
+            var effectiveLimit = limit.HasValue && limit.Value > 0 ? limit.Value : Math.Max(0, total - offset);
+            if (offset >= total)
+            {
+                return new RoslynQueryResponse
+                {
+                    Success = true,
+                    Data = new { items = new List<System.Text.Json.JsonElement>(), total, offset, limit = effectiveLimit, hasMore = false },
+                    Message = $"Page offset {offset}, limit {effectiveLimit}, total {total}"
+                };
+            }
+
+            var end = Math.Min(total, offset + effectiveLimit);
+            var items = new List<System.Text.Json.JsonElement>(capacity: Math.Max(0, end - offset));
+
+            int index = 0;
+            foreach (var item in jsonElement.EnumerateArray())
+            {
+                if (index >= offset && index < end)
+                {
+                    items.Add(item);
+                }
+                if (index++ >= end) { break; }
+            }
+
+            var hasMore = end < total;
+
+            return new RoslynQueryResponse
+            {
+                Success = true,
+                Data = new { items, total, offset, limit = effectiveLimit, hasMore },
+                Message = $"Page offset {offset}, limit {effectiveLimit}, total {total}"
             };
         }
 
