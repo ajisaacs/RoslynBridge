@@ -95,7 +95,7 @@ RoslynBridge exposes Visual Studio's live Roslyn workspace via HTTP, enabling:
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/yourusername/RoslynBridge.git
+   git clone https://github.com/ajisaacs/RoslynBridge.git
    cd RoslynBridge
    ```
 
@@ -475,7 +475,7 @@ Contributions are welcome! Please:
 
 ## License
 
-[Specify your license here - MIT, Apache 2.0, etc.]
+MIT License - see LICENSE file for details
 
 ## Credits
 
@@ -486,9 +486,8 @@ Built with:
 
 ## Support
 
-- Report issues: [GitHub Issues](https://github.com/yourusername/RoslynBridge/issues)
-- Documentation: See `/docs` folder
-- Contact: [your-email@example.com]
+- Report issues: [GitHub Issues](https://github.com/ajisaacs/RoslynBridge/issues)
+- Documentation: See this README and inline code documentation
 
 ---
 
