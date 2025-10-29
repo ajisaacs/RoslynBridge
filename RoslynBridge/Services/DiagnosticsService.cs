@@ -1,3 +1,4 @@
+#nullable enable
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -79,11 +80,22 @@ namespace RoslynBridge.Services
             var sourceText = await document.GetTextAsync();
             var position = sourceText.Lines[request.Line.Value - 1].Start + request.Column.Value;
             var node = syntaxRoot.FindToken(position).Parent;
+
+            if (node == null)
+            {
+                return new QueryResponse { Success = false, Error = "Syntax node not found at specified position" };
+            }
+
             var symbol = semanticModel.GetSymbolInfo(node).Symbol;
 
             if (symbol == null)
             {
                 return new QueryResponse { Success = false, Error = "Symbol not found" };
+            }
+
+            if (Workspace?.CurrentSolution == null)
+            {
+                return new QueryResponse { Success = false, Error = "Workspace not available" };
             }
 
             var references = await SymbolFinder.FindReferencesAsync(symbol, Workspace.CurrentSolution);

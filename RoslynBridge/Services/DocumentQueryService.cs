@@ -1,4 +1,4 @@
-using System;
+#nullable enable
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -23,7 +23,8 @@ namespace RoslynBridge.Services
                 return CreateErrorResponse("FilePath is required");
             }
 
-            var document = FindDocument(request.FilePath);
+            // FilePath is guaranteed to be non-null after the check above
+            var document = FindDocument(request.FilePath!);
 
             if (document == null)
             {
@@ -76,7 +77,7 @@ namespace RoslynBridge.Services
                 return CreateErrorResponse("FilePath is required");
             }
 
-            var document = FindDocument(request.FilePath);
+            var document = FindDocument(request.FilePath!);
 
             if (document == null)
             {
@@ -104,7 +105,7 @@ namespace RoslynBridge.Services
                 return CreateErrorResponse("FilePath is required");
             }
 
-            var document = FindDocument(request.FilePath);
+            var document = FindDocument(request.FilePath!);
 
             if (document == null)
             {

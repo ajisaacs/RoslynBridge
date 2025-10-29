@@ -1,10 +1,10 @@
+#nullable enable
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.IO;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.VisualStudio.LanguageServices;
 using Microsoft.VisualStudio.Shell;
 using RoslynBridge.Models;
@@ -93,7 +93,8 @@ namespace RoslynBridge.Services
         {
             if (string.IsNullOrEmpty(xmlDoc)) return null;
 
-            var summaryStart = xmlDoc.IndexOf("<summary>", StringComparison.Ordinal);
+            // At this point xmlDoc is guaranteed to be non-null
+            var summaryStart = xmlDoc!.IndexOf("<summary>", StringComparison.Ordinal);
             var summaryEnd = xmlDoc.IndexOf("</summary>", StringComparison.Ordinal);
 
             if (summaryStart >= 0 && summaryEnd > summaryStart)
