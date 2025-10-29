@@ -1,0 +1,37 @@
+root = true
+
+# Apply defaults to all C# files
+[*.cs]
+
+# Disable analyzers for common generated files
+[*.g.cs]
+dotnet_analyzer_diagnostic.severity = none
+dotnet_diagnostic.CS8019.severity = none
+dotnet_diagnostic.IDE0005.severity = none
+
+[*.g.i.cs]
+dotnet_analyzer_diagnostic.severity = none
+dotnet_diagnostic.CS8019.severity = none
+dotnet_diagnostic.IDE0005.severity = none
+
+[*.generated.cs]
+dotnet_analyzer_diagnostic.severity = none
+dotnet_diagnostic.CS8019.severity = none
+dotnet_diagnostic.IDE0005.severity = none
+
+[*.designer.cs]
+dotnet_analyzer_diagnostic.severity = none
+dotnet_diagnostic.CS8019.severity = none
+dotnet_diagnostic.IDE0005.severity = none
+
+[# Globally generated files]
+[{**/GlobalUsings.g.cs}]
+dotnet_analyzer_diagnostic.severity = none
+dotnet_diagnostic.CS8019.severity = none
+dotnet_diagnostic.IDE0005.severity = none
+
+[{**/Generated/*.cs}]
+dotnet_analyzer_diagnostic.severity = none
+dotnet_diagnostic.CS8019.severity = none
+dotnet_diagnostic.IDE0005.severity = none
+

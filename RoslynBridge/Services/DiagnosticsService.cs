@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis;
@@ -29,10 +30,15 @@ namespace RoslynBridge.Services
 
                 if (document != null)
                 {
+                    if (IsGeneratedFile(document.FilePath))
+                    {
+                        return new QueryResponse { Success = true, Data = diagnostics };
+                    }
                     var semanticModel = await document.GetSemanticModelAsync();
                     if (semanticModel != null)
                     {
-                        var diags = semanticModel.GetDiagnostics();
+                        var diags = semanticModel.GetDiagnostics()
+                            .Where(d => !IsFromGeneratedFile(d));
                         diagnostics.AddRange(diags.Select(d => CreateDiagnosticInfo(d)));
                     }
                 }
@@ -44,13 +50,38 @@ namespace RoslynBridge.Services
                     var compilation = await project.GetCompilationAsync();
                     if (compilation != null)
                     {
-                        var diags = compilation.GetDiagnostics();
+                        var diags = compilation.GetDiagnostics()
+                            .Where(d => !IsFromGeneratedFile(d));
                         diagnostics.AddRange(diags.Select(d => CreateDiagnosticInfo(d)));
                     }
                 }
             }
 
             return new QueryResponse { Success = true, Data = diagnostics };
+        }
+
+        private static bool IsFromGeneratedFile(Diagnostic diagnostic)
+        {
+            if (!diagnostic.Location.IsInSource) return false;
+            var path = diagnostic.Location.SourceTree?.FilePath;
+            return IsGeneratedFile(path);
+        }
+
+        private static bool IsGeneratedFile(string? filePath)
+        {
+            if (string.IsNullOrEmpty(filePath)) return false;
+            try
+            {
+                var p = filePath.Replace('/', '\\').ToLowerInvariant();
+                if (p.Contains("\\obj\\") || p.Contains("\\bin\\")) return true;
+                if (p.EndsWith(".g.cs") || p.EndsWith(".g.i.cs") || p.EndsWith(".generated.cs") || p.EndsWith(".designer.cs")) return true;
+                if (p.EndsWith("\\globalusings.g.cs")) return true;
+                return false;
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         public async Task<QueryResponse> FindReferencesAsync(QueryRequest request)

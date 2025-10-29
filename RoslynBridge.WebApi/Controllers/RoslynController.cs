@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
+using System;
+using System.Collections.Generic;
 using RoslynBridge.WebApi.Models;
 using RoslynBridge.WebApi.Services;
 using RoslynBridge.WebApi.Utilities;
@@ -130,6 +132,9 @@ public class RoslynController : ControllerBase
 
         var result = await _bridgeClient.ExecuteQueryAsync(request, instancePort, solutionName, cancellationToken);
 
+        // Server-side: exclude diagnostics from generated files
+        result = FilterOutGeneratedDiagnostics(result);
+
         // If severity filter was requested, apply it to the response data
         if (!string.IsNullOrEmpty(severity) && result.Success && result.Data != null)
         {
@@ -165,6 +170,9 @@ public class RoslynController : ControllerBase
             FilePath = filePath
         };
         var result = await _bridgeClient.ExecuteQueryAsync(request, instancePort, null, cancellationToken);
+
+        // Server-side: exclude diagnostics from generated files before summarizing
+        result = FilterOutGeneratedDiagnostics(result);
 
         if (!result.Success || result.Data == null)
         {
@@ -204,6 +212,9 @@ public class RoslynController : ControllerBase
             FilePath = filePath
         };
         var result = await _bridgeClient.ExecuteQueryAsync(request, instancePort, null, cancellationToken);
+
+        // Server-side: exclude diagnostics from generated files before counting
+        result = FilterOutGeneratedDiagnostics(result);
 
         if (!result.Success || result.Data == null)
         {
@@ -417,6 +428,77 @@ public class RoslynController : ControllerBase
         }
 
         return response;
+    }
+
+    private RoslynQueryResponse FilterOutGeneratedDiagnostics(RoslynQueryResponse response)
+    {
+        if (response.Data is System.Text.Json.JsonElement json && json.ValueKind == System.Text.Json.JsonValueKind.Array)
+        {
+            var filtered = new List<System.Text.Json.JsonElement>();
+            int removed = 0;
+
+            foreach (var diagnostic in json.EnumerateArray())
+            {
+                string? path = null;
+                if (diagnostic.ValueKind == System.Text.Json.JsonValueKind.Object &&
+                    diagnostic.TryGetProperty("location", out var loc) &&
+                    loc.ValueKind == System.Text.Json.JsonValueKind.Object &&
+                    loc.TryGetProperty("filePath", out var fp))
+                {
+                    path = fp.GetString();
+                }
+
+                if (!IsGeneratedPath(path))
+                {
+                    filtered.Add(diagnostic);
+                }
+                else
+                {
+                    removed++;
+                }
+            }
+
+            return new RoslynQueryResponse
+            {
+                Success = response.Success,
+                Data = filtered,
+                Message = removed > 0 ? $"Filtered out {removed} generated diagnostic(s)" : response.Message,
+                Error = response.Error
+            };
+        }
+
+        return response;
+    }
+
+    private static bool IsGeneratedPath(string? filePath)
+    {
+        if (string.IsNullOrEmpty(filePath)) return false;
+
+        try
+        {
+            var p = filePath.Replace('/', '\\').ToLowerInvariant();
+
+            // Build output directories
+            if (p.Contains("\\obj\\") || p.Contains("\\bin\\")) return true;
+
+            // Common generated suffixes
+            if (p.EndsWith(".g.cs") || p.EndsWith(".g.i.cs") || p.EndsWith(".generated.cs") || p.EndsWith(".designer.cs")) return true;
+
+            // Global usings
+            if (p.EndsWith("\\globalusings.g.cs")) return true;
+
+            // Razor generated files often include .razor.*.g.cs
+            if (p.Contains(".razor") && p.EndsWith(".g.cs")) return true;
+
+            // EF Core migrations designer/snapshot files
+            if (p.Contains("\\migrations\\") && (p.EndsWith(".designer.cs") || p.EndsWith("modelsnapshot.cs"))) return true;
+
+            return false;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private HashSet<string> ParseSeverityFilter(string? severityFilter)
