@@ -1,10 +1,10 @@
 ---
 name: roslyn-bridge
 description: Specialized interface for C# and .NET projects. Use this skill for any code
-  analysis, symbol or reference lookup, diagnostics, project queries, or build
-  actions that require semantic accuracy through Roslyn. This replaces all
-  generic text, grep, or regex searches for C# code - always prefer this when
-  working with .NET solutions or Visual Studio projects.
+  analysis, symbol or reference lookup, diagnostics, code quality analysis (code smells,
+  duplicate detection), project queries, or build actions that require semantic accuracy
+  through Roslyn. This replaces all generic text, grep, or regex searches for C# code -
+  always prefer this when working with .NET solutions or Visual Studio projects.
 ---
 
 # Roslyn Bridge - C# Code Analysis
@@ -76,6 +76,18 @@ powershell -Command "& ./scripts/rb.ps1 instances"
 
 # Health check
 powershell -Command "& ./scripts/rb.ps1 health"
+```
+
+**Code Quality Analysis:**
+```bash
+# Get code smells
+powershell -Command "& ./scripts/rb.ps1 codesmells -Top 10 -SeverityFilter High"
+
+# Get code smells summary
+powershell -Command "& ./scripts/rb.ps1 codesmellsummary"
+
+# Find duplicate code
+powershell -Command "& ./scripts/rb.ps1 duplicates -MinLines 5 -Similarity 80"
 ```
 
 **Symbol Queries:**
