@@ -360,6 +360,41 @@ public class RoslynController : ControllerBase
         return Ok(result);
     }
 
+    /// <summary>
+    /// Detect duplicate code blocks across the solution
+    /// </summary>
+    /// <param name="minLines">Minimum number of lines for a duplicate (default: 5)</param>
+    /// <param name="similarity">Minimum similarity percentage 0-100 (default: 80)</param>
+    /// <param name="instancePort">Optional: specific VS instance port to target</param>
+    /// <param name="solutionName">Optional: solution name to route to</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>List of detected code duplications</returns>
+    [HttpGet("duplicates")]
+    [ProducesResponseType(typeof(RoslynQueryResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<RoslynQueryResponse>> GetDuplicates(
+        [FromQuery] int? minLines = null,
+        [FromQuery] int? similarity = null,
+        [FromQuery] int? instancePort = null,
+        [FromQuery] string? solutionName = null,
+        CancellationToken cancellationToken = default)
+    {
+        var parameters = new Dictionary<string, string>();
+
+        if (minLines.HasValue)
+            parameters["minLines"] = minLines.Value.ToString();
+        if (similarity.HasValue)
+            parameters["similarity"] = similarity.Value.ToString();
+
+        var request = new RoslynQueryRequest
+        {
+            QueryType = "getduplicates",
+            Parameters = parameters.Count > 0 ? parameters : null
+        };
+
+        var result = await _bridgeClient.ExecuteQueryAsync(request, instancePort, solutionName, cancellationToken);
+        return Ok(result);
+    }
+
     private DiagnosticsSummary CreateDiagnosticsSummary(object data, string? filePath)
     {
         var summary = new DiagnosticsSummary { FilePath = filePath };
