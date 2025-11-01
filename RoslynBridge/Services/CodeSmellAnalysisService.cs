@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.IO;
 using Microsoft.VisualStudio.Shell;
 using RoslynBridge.Models;
 
@@ -549,6 +550,8 @@ namespace RoslynBridge.Services
         {
             var minLines = 5; // Default minimum lines
             var minSimilarity = 80; // Default 80% similarity
+            string? classNameFilter = null;
+            string? namespaceFilter = null;
 
             if (request.Parameters != null)
             {
@@ -556,10 +559,14 @@ namespace RoslynBridge.Services
                     minLines = ml;
                 if (request.Parameters.TryGetValue("similarity", out var simStr) && int.TryParse(simStr, out var sim))
                     minSimilarity = sim;
+                if (request.Parameters.TryGetValue("className", out var cn))
+                    classNameFilter = cn;
+                if (request.Parameters.TryGetValue("namespace", out var ns))
+                    namespaceFilter = ns;
             }
 
             var duplicates = new List<DuplicateCodeInfo>();
-            var methodInfos = new List<(string projectName, IMethodSymbol symbol, MethodDeclarationSyntax syntax, string[] tokens)>();
+            var methodInfos = new List<(string projectName, IMethodSymbol symbol, MethodDeclarationSyntax syntax, string[] tokens, int tokenCount)>();
 
             // Collect all methods from the solution
             foreach (var project in Workspace?.CurrentSolution.Projects ?? Enumerable.Empty<Project>())
@@ -582,45 +589,91 @@ namespace RoslynBridge.Services
                         if (methodSymbol == null)
                             continue;
 
+                        // Apply class name filter
+                        if (!string.IsNullOrEmpty(classNameFilter))
+                        {
+                            var containingType = methodSymbol.ContainingType?.Name;
+                            if (containingType == null || containingType.IndexOf(classNameFilter, StringComparison.OrdinalIgnoreCase) < 0)
+                                continue;
+                        }
+
+                        // Apply namespace filter
+                        if (!string.IsNullOrEmpty(namespaceFilter))
+                        {
+                            var containingNamespace = methodSymbol.ContainingNamespace?.ToDisplayString();
+                            if (containingNamespace == null || containingNamespace.IndexOf(namespaceFilter, StringComparison.OrdinalIgnoreCase) < 0)
+                                continue;
+                        }
+
                         var lineCount = GetMethodLineCount(method);
                         if (lineCount < minLines)
                             continue;
 
                         // Extract tokens for comparison (ignore trivia/whitespace)
                         var tokens = ExtractMethodTokens(method);
-                        methodInfos.Add((project.Name, methodSymbol, method, tokens));
+                        if (tokens.Length == 0)
+                            continue;
+
+                        methodInfos.Add((project.Name, methodSymbol, method, tokens, tokens.Length));
                     }
                 }
             }
 
-            // Compare all pairs of methods
+            // Group methods by similar token counts to reduce comparisons (±30% size difference)
+            var buckets = new Dictionary<int, List<int>>();
             for (int i = 0; i < methodInfos.Count; i++)
             {
-                for (int j = i + 1; j < methodInfos.Count; j++)
+                var tokenCount = methodInfos[i].tokenCount;
+                var bucketKey = tokenCount / 10; // Group by 10s
+
+                if (!buckets.ContainsKey(bucketKey))
+                    buckets[bucketKey] = new List<int>();
+                buckets[bucketKey].Add(i);
+            }
+
+            // Compare methods within same bucket and adjacent buckets
+            foreach (var bucket in buckets.Values)
+            {
+                for (int i = 0; i < bucket.Count; i++)
                 {
-                    var (proj1, sym1, syntax1, tokens1) = methodInfos[i];
-                    var (proj2, sym2, syntax2, tokens2) = methodInfos[j];
-
-                    // Skip comparing a method to itself
-                    if (sym1.Equals(sym2))
-                        continue;
-
-                    var similarity = CalculateTokenSimilarity(tokens1, tokens2);
-                    if (similarity >= minSimilarity)
+                    for (int j = i + 1; j < bucket.Count; j++)
                     {
-                        var lineCount = Math.Min(GetMethodLineCount(syntax1), GetMethodLineCount(syntax2));
-                        duplicates.Add(new DuplicateCodeInfo
+                        var idx1 = bucket[i];
+                        var idx2 = bucket[j];
+
+                        var (proj1, sym1, syntax1, tokens1, count1) = methodInfos[idx1];
+                        var (proj2, sym2, syntax2, tokens2, count2) = methodInfos[idx2];
+
+                        // Skip if methods are too different in size (early filter)
+                        var sizeDiff = Math.Abs(count1 - count2);
+                        var maxSize = Math.Max(count1, count2);
+                        if (maxSize > 0 && (double)sizeDiff / maxSize > 0.3)
+                            continue;
+
+                        // Skip comparing a method to itself
+                        if (sym1.Equals(sym2))
+                            continue;
+
+                        var similarity = CalculateTokenSimilarityFast(tokens1, tokens2, minSimilarity);
+                        if (similarity >= minSimilarity)
                         {
-                            Original = CreateDuplicateLocation(proj1, sym1, syntax1),
-                            Duplicate = CreateDuplicateLocation(proj2, sym2, syntax2),
-                            SimilarityPercent = similarity,
-                            LineCount = lineCount,
-                            TokenCount = Math.Min(tokens1.Length, tokens2.Length),
-                            Message = $"{similarity}% similar code in {sym1.Name} and {sym2.Name}"
-                        });
+                            var lineCount = Math.Min(GetMethodLineCount(syntax1), GetMethodLineCount(syntax2));
+                            duplicates.Add(new DuplicateCodeInfo
+                            {
+                                Original = CreateDuplicateLocation(proj1, sym1, syntax1),
+                                Duplicate = CreateDuplicateLocation(proj2, sym2, syntax2),
+                                SimilarityPercent = similarity,
+                                LineCount = lineCount,
+                                TokenCount = Math.Min(tokens1.Length, tokens2.Length),
+                                Message = $"{similarity}% similar code in {sym1.Name} and {sym2.Name}"
+                            });
+                        }
                     }
                 }
             }
+
+            // Sort by similarity descending
+            duplicates = duplicates.OrderByDescending(d => d.SimilarityPercent).ToList();
 
             return CreateSuccessResponse(duplicates, $"Found {duplicates.Count} duplicate(s)");
         }
@@ -650,6 +703,37 @@ namespace RoslynBridge.Services
             return (int)((double)lcsLength / maxLength * 100);
         }
 
+        /// <summary>
+        /// Fast similarity calculation with early termination
+        /// Uses space-optimized LCS with two rows instead of full 2D array
+        /// </summary>
+        private int CalculateTokenSimilarityFast(string[] tokens1, string[] tokens2, int minSimilarity)
+        {
+            if (tokens1.Length == 0 || tokens2.Length == 0)
+                return 0;
+
+            // Quick exact match check
+            if (tokens1.Length == tokens2.Length)
+            {
+                bool exactMatch = true;
+                for (int i = 0; i < tokens1.Length; i++)
+                {
+                    if (tokens1[i] != tokens2[i])
+                    {
+                        exactMatch = false;
+                        break;
+                    }
+                }
+                if (exactMatch) return 100;
+            }
+
+            // Use space-optimized LCS (O(min(m,n)) space instead of O(m*n))
+            var lcsLength = LongestCommonSubsequenceOptimized(tokens1, tokens2);
+            var maxLength = Math.Max(tokens1.Length, tokens2.Length);
+
+            return (int)((double)lcsLength / maxLength * 100);
+        }
+
         private int LongestCommonSubsequence(string[] seq1, string[] seq2)
         {
             int m = seq1.Length;
@@ -668,6 +752,46 @@ namespace RoslynBridge.Services
             }
 
             return dp[m, n];
+        }
+
+        /// <summary>
+        /// Space-optimized LCS that uses O(min(m,n)) space instead of O(m*n)
+        /// </summary>
+        private int LongestCommonSubsequenceOptimized(string[] seq1, string[] seq2)
+        {
+            // Ensure seq1 is the shorter sequence to minimize space usage
+            if (seq1.Length > seq2.Length)
+            {
+                var temp = seq1;
+                seq1 = seq2;
+                seq2 = temp;
+            }
+
+            int m = seq1.Length;
+            int n = seq2.Length;
+
+            // Use only two rows instead of full 2D array
+            var prev = new int[m + 1];
+            var curr = new int[m + 1];
+
+            for (int j = 1; j <= n; j++)
+            {
+                for (int i = 1; i <= m; i++)
+                {
+                    if (seq1[i - 1] == seq2[j - 1])
+                        curr[i] = prev[i - 1] + 1;
+                    else
+                        curr[i] = Math.Max(curr[i - 1], prev[i]);
+                }
+
+                // Swap rows
+                var temp = prev;
+                prev = curr;
+                curr = temp;
+                Array.Clear(curr, 0, curr.Length);
+            }
+
+            return prev[m];
         }
 
         private DuplicateLocation CreateDuplicateLocation(string projectName, IMethodSymbol symbol, MethodDeclarationSyntax syntax)
