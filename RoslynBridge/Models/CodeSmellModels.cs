@@ -113,4 +113,76 @@ namespace RoslynBridge.Models
         public int LongClasses { get; set; }
         public CodeSmellThresholds? Thresholds { get; set; }
     }
+
+    /// <summary>
+    /// Represents a detected code duplication
+    /// </summary>
+    public class DuplicateCodeInfo
+    {
+        /// <summary>
+        /// First occurrence of the duplicate
+        /// </summary>
+        public DuplicateLocation? Original { get; set; }
+
+        /// <summary>
+        /// Second occurrence of the duplicate
+        /// </summary>
+        public DuplicateLocation? Duplicate { get; set; }
+
+        /// <summary>
+        /// Similarity percentage (0-100)
+        /// </summary>
+        public int SimilarityPercent { get; set; }
+
+        /// <summary>
+        /// Number of lines in the duplicated block
+        /// </summary>
+        public int LineCount { get; set; }
+
+        /// <summary>
+        /// Number of tokens matched
+        /// </summary>
+        public int TokenCount { get; set; }
+
+        /// <summary>
+        /// Description of the duplication
+        /// </summary>
+        public string? Message { get; set; }
+    }
+
+    /// <summary>
+    /// Location information for a duplicate code block
+    /// </summary>
+    public class DuplicateLocation
+    {
+        /// <summary>
+        /// Project name
+        /// </summary>
+        public string? ProjectName { get; set; }
+
+        /// <summary>
+        /// File path
+        /// </summary>
+        public string? FilePath { get; set; }
+
+        /// <summary>
+        /// Method or class name
+        /// </summary>
+        public string? SymbolName { get; set; }
+
+        /// <summary>
+        /// Symbol kind (Method, Class, etc.)
+        /// </summary>
+        public string? SymbolKind { get; set; }
+
+        /// <summary>
+        /// Starting line number
+        /// </summary>
+        public int StartLine { get; set; }
+
+        /// <summary>
+        /// Ending line number
+        /// </summary>
+        public int EndLine { get; set; }
+    }
 }
