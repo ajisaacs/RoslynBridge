@@ -365,6 +365,8 @@ public class RoslynController : ControllerBase
     /// </summary>
     /// <param name="minLines">Minimum number of lines for a duplicate (default: 5)</param>
     /// <param name="similarity">Minimum similarity percentage 0-100 (default: 80)</param>
+    /// <param name="className">Optional: filter by class name (case-insensitive partial match)</param>
+    /// <param name="namespace">Optional: filter by namespace (case-insensitive partial match)</param>
     /// <param name="instancePort">Optional: specific VS instance port to target</param>
     /// <param name="solutionName">Optional: solution name to route to</param>
     /// <param name="cancellationToken">Cancellation token</param>
@@ -374,6 +376,8 @@ public class RoslynController : ControllerBase
     public async Task<ActionResult<RoslynQueryResponse>> GetDuplicates(
         [FromQuery] int? minLines = null,
         [FromQuery] int? similarity = null,
+        [FromQuery] string? className = null,
+        [FromQuery] string? @namespace = null,
         [FromQuery] int? instancePort = null,
         [FromQuery] string? solutionName = null,
         CancellationToken cancellationToken = default)
@@ -384,6 +388,10 @@ public class RoslynController : ControllerBase
             parameters["minLines"] = minLines.Value.ToString();
         if (similarity.HasValue)
             parameters["similarity"] = similarity.Value.ToString();
+        if (!string.IsNullOrEmpty(className))
+            parameters["className"] = className;
+        if (!string.IsNullOrEmpty(@namespace))
+            parameters["namespace"] = @namespace;
 
         var request = new RoslynQueryRequest
         {
