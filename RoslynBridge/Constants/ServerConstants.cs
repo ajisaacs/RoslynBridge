@@ -47,5 +47,9 @@ namespace RoslynBridge.Constants
         public const string CleanProject = "cleanproject";
         public const string RestorePackages = "restorepackages";
         public const string CreateDirectory = "createdirectory";
+
+        // Code smell analysis endpoints
+        public const string GetCodeSmells = "getcodesmells";
+        public const string GetCodeSmellSummary = "getcodesmellsummary";
     }
 }
