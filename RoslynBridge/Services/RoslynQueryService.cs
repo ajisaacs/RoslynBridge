@@ -111,6 +111,7 @@ namespace RoslynBridge.Services
                     // Code smell analysis
                     QueryTypes.GetCodeSmells => await _codeSmellService.GetCodeSmellsAsync(request),
                     QueryTypes.GetCodeSmellSummary => await _codeSmellService.GetCodeSmellSummaryAsync(request),
+                    QueryTypes.GetDuplicates => await _codeSmellService.GetDuplicatesAsync(request),
 
                     _ => new QueryResponse
                     {

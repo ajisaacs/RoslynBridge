@@ -51,5 +51,6 @@ namespace RoslynBridge.Constants
         // Code smell analysis endpoints
         public const string GetCodeSmells = "getcodesmells";
         public const string GetCodeSmellSummary = "getcodesmellsummary";
+        public const string GetDuplicates = "getduplicates";
     }
 }
