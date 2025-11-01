@@ -54,6 +54,7 @@
     <Compile Include="Constants\ServerConstants.cs" />
     <!-- Models -->
     <Compile Include="Models\CallHierarchyModels.cs" />
+    <Compile Include="Models\CodeSmellModels.cs" />
     <Compile Include="Models\DiagnosticModels.cs" />
     <Compile Include="Models\DocumentModels.cs" />
     <Compile Include="Models\LocationModels.cs" />
@@ -65,6 +66,7 @@
     <Compile Include="Server\BridgeServer.cs" />
     <!-- Services -->
     <Compile Include="Services\BaseRoslynService.cs" />
+    <Compile Include="Services\CodeSmellAnalysisService.cs" />
     <Compile Include="Services\ConfigurationService.cs" />
     <Compile Include="Services\DiagnosticsService.cs" />
     <Compile Include="Services\DocumentQueryService.cs" />
