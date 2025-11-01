@@ -541,5 +541,149 @@ namespace RoslynBridge.Services
                 _currentDepth--;
             }
         }
+
+        /// <summary>
+        /// Detect duplicate code blocks across the solution
+        /// </summary>
+        public async Task<QueryResponse> GetDuplicatesAsync(QueryRequest request)
+        {
+            var minLines = 5; // Default minimum lines
+            var minSimilarity = 80; // Default 80% similarity
+
+            if (request.Parameters != null)
+            {
+                if (request.Parameters.TryGetValue("minLines", out var minLinesStr) && int.TryParse(minLinesStr, out var ml))
+                    minLines = ml;
+                if (request.Parameters.TryGetValue("similarity", out var simStr) && int.TryParse(simStr, out var sim))
+                    minSimilarity = sim;
+            }
+
+            var duplicates = new List<DuplicateCodeInfo>();
+            var methodInfos = new List<(string projectName, IMethodSymbol symbol, MethodDeclarationSyntax syntax, string[] tokens)>();
+
+            // Collect all methods from the solution
+            foreach (var project in Workspace?.CurrentSolution.Projects ?? Enumerable.Empty<Project>())
+            {
+                foreach (var document in project.Documents)
+                {
+                    if (IsGeneratedFile(document.FilePath))
+                        continue;
+
+                    var syntaxRoot = await document.GetSyntaxRootAsync();
+                    var semanticModel = await document.GetSemanticModelAsync();
+
+                    if (syntaxRoot == null || semanticModel == null)
+                        continue;
+
+                    var methods = syntaxRoot.DescendantNodes().OfType<MethodDeclarationSyntax>();
+                    foreach (var method in methods)
+                    {
+                        var methodSymbol = semanticModel.GetDeclaredSymbol(method);
+                        if (methodSymbol == null)
+                            continue;
+
+                        var lineCount = GetMethodLineCount(method);
+                        if (lineCount < minLines)
+                            continue;
+
+                        // Extract tokens for comparison (ignore trivia/whitespace)
+                        var tokens = ExtractMethodTokens(method);
+                        methodInfos.Add((project.Name, methodSymbol, method, tokens));
+                    }
+                }
+            }
+
+            // Compare all pairs of methods
+            for (int i = 0; i < methodInfos.Count; i++)
+            {
+                for (int j = i + 1; j < methodInfos.Count; j++)
+                {
+                    var (proj1, sym1, syntax1, tokens1) = methodInfos[i];
+                    var (proj2, sym2, syntax2, tokens2) = methodInfos[j];
+
+                    // Skip comparing a method to itself
+                    if (sym1.Equals(sym2))
+                        continue;
+
+                    var similarity = CalculateTokenSimilarity(tokens1, tokens2);
+                    if (similarity >= minSimilarity)
+                    {
+                        var lineCount = Math.Min(GetMethodLineCount(syntax1), GetMethodLineCount(syntax2));
+                        duplicates.Add(new DuplicateCodeInfo
+                        {
+                            Original = CreateDuplicateLocation(proj1, sym1, syntax1),
+                            Duplicate = CreateDuplicateLocation(proj2, sym2, syntax2),
+                            SimilarityPercent = similarity,
+                            LineCount = lineCount,
+                            TokenCount = Math.Min(tokens1.Length, tokens2.Length),
+                            Message = $"{similarity}% similar code in {sym1.Name} and {sym2.Name}"
+                        });
+                    }
+                }
+            }
+
+            return CreateSuccessResponse(duplicates, $"Found {duplicates.Count} duplicate(s)");
+        }
+
+        private string[] ExtractMethodTokens(MethodDeclarationSyntax method)
+        {
+            var body = method.Body ?? (SyntaxNode?)method.ExpressionBody;
+            if (body == null)
+                return Array.Empty<string>();
+
+            // Get all tokens, excluding trivia (whitespace, comments)
+            return body.DescendantTokens()
+                .Where(t => !t.IsKind(SyntaxKind.None))
+                .Select(t => t.Kind().ToString())
+                .ToArray();
+        }
+
+        private int CalculateTokenSimilarity(string[] tokens1, string[] tokens2)
+        {
+            if (tokens1.Length == 0 || tokens2.Length == 0)
+                return 0;
+
+            // Simple token-based similarity using Longest Common Subsequence
+            var lcsLength = LongestCommonSubsequence(tokens1, tokens2);
+            var maxLength = Math.Max(tokens1.Length, tokens2.Length);
+
+            return (int)((double)lcsLength / maxLength * 100);
+        }
+
+        private int LongestCommonSubsequence(string[] seq1, string[] seq2)
+        {
+            int m = seq1.Length;
+            int n = seq2.Length;
+            var dp = new int[m + 1, n + 1];
+
+            for (int i = 1; i <= m; i++)
+            {
+                for (int j = 1; j <= n; j++)
+                {
+                    if (seq1[i - 1] == seq2[j - 1])
+                        dp[i, j] = dp[i - 1, j - 1] + 1;
+                    else
+                        dp[i, j] = Math.Max(dp[i - 1, j], dp[i, j - 1]);
+                }
+            }
+
+            return dp[m, n];
+        }
+
+        private DuplicateLocation CreateDuplicateLocation(string projectName, IMethodSymbol symbol, MethodDeclarationSyntax syntax)
+        {
+            var location = syntax.GetLocation();
+            var lineSpan = location.GetLineSpan();
+
+            return new DuplicateLocation
+            {
+                ProjectName = projectName,
+                FilePath = lineSpan.Path,
+                SymbolName = symbol.ToDisplayString(),
+                SymbolKind = "Method",
+                StartLine = lineSpan.StartLinePosition.Line + 1,
+                EndLine = lineSpan.EndLinePosition.Line + 1
+            };
+        }
     }
 }
