@@ -236,6 +236,130 @@ public class RoslynController : ControllerBase
         });
     }
 
+    /// <summary>
+    /// Get code smells (long methods, high complexity, etc.)
+    /// </summary>
+    /// <param name="filePath">Optional file path to filter code smells</param>
+    /// <param name="projectName">Optional project name to filter code smells</param>
+    /// <param name="smellType">Optional smell type filter (LongMethod, HighComplexity, TooManyParameters, DeepNesting, LargeClass, LongClass)</param>
+    /// <param name="severity">Optional severity filter (Low, Medium, High, Critical)</param>
+    /// <param name="top">Optional: return only top N worst code smells</param>
+    /// <param name="methodLength">Optional threshold override for method length (default: 50)</param>
+    /// <param name="complexity">Optional threshold override for cyclomatic complexity (default: 10)</param>
+    /// <param name="parameterCount">Optional threshold override for parameter count (default: 5)</param>
+    /// <param name="nestingDepth">Optional threshold override for nesting depth (default: 4)</param>
+    /// <param name="classMembers">Optional threshold override for class member count (default: 20)</param>
+    /// <param name="classLength">Optional threshold override for class length (default: 300)</param>
+    /// <param name="instancePort">Optional: specific VS instance port to target</param>
+    /// <param name="solutionName">Optional: solution name to route to</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>List of detected code smells ordered by priority</returns>
+    [HttpGet("codesmells")]
+    [ProducesResponseType(typeof(RoslynQueryResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<RoslynQueryResponse>> GetCodeSmells(
+        [FromQuery] string? filePath = null,
+        [FromQuery] string? projectName = null,
+        [FromQuery] string? smellType = null,
+        [FromQuery] string? severity = null,
+        [FromQuery] int? top = null,
+        [FromQuery] int? methodLength = null,
+        [FromQuery] int? complexity = null,
+        [FromQuery] int? parameterCount = null,
+        [FromQuery] int? nestingDepth = null,
+        [FromQuery] int? classMembers = null,
+        [FromQuery] int? classLength = null,
+        [FromQuery] int? instancePort = null,
+        [FromQuery] string? solutionName = null,
+        CancellationToken cancellationToken = default)
+    {
+        var parameters = new Dictionary<string, string>();
+
+        if (!string.IsNullOrEmpty(projectName))
+            parameters["projectName"] = projectName;
+        if (!string.IsNullOrEmpty(smellType))
+            parameters["smellType"] = smellType;
+        if (!string.IsNullOrEmpty(severity))
+            parameters["severity"] = severity;
+        if (top.HasValue)
+            parameters["top"] = top.Value.ToString();
+        if (methodLength.HasValue)
+            parameters["methodLength"] = methodLength.Value.ToString();
+        if (complexity.HasValue)
+            parameters["complexity"] = complexity.Value.ToString();
+        if (parameterCount.HasValue)
+            parameters["parameterCount"] = parameterCount.Value.ToString();
+        if (nestingDepth.HasValue)
+            parameters["nestingDepth"] = nestingDepth.Value.ToString();
+        if (classMembers.HasValue)
+            parameters["classMembers"] = classMembers.Value.ToString();
+        if (classLength.HasValue)
+            parameters["classLength"] = classLength.Value.ToString();
+
+        var request = new RoslynQueryRequest
+        {
+            QueryType = "getcodesmells",
+            FilePath = filePath,
+            Parameters = parameters.Count > 0 ? parameters : null
+        };
+
+        var result = await _bridgeClient.ExecuteQueryAsync(request, instancePort, solutionName, cancellationToken);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Get code smell summary (counts by smell type)
+    /// </summary>
+    /// <param name="filePath">Optional file path to filter code smells</param>
+    /// <param name="methodLength">Optional threshold override for method length (default: 50)</param>
+    /// <param name="complexity">Optional threshold override for cyclomatic complexity (default: 10)</param>
+    /// <param name="parameterCount">Optional threshold override for parameter count (default: 5)</param>
+    /// <param name="nestingDepth">Optional threshold override for nesting depth (default: 4)</param>
+    /// <param name="classMembers">Optional threshold override for class member count (default: 20)</param>
+    /// <param name="classLength">Optional threshold override for class length (default: 300)</param>
+    /// <param name="instancePort">Optional: specific VS instance port to target</param>
+    /// <param name="solutionName">Optional: solution name to route to</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Summary of code smells with counts by type</returns>
+    [HttpGet("codesmells/summary")]
+    [ProducesResponseType(typeof(RoslynQueryResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<RoslynQueryResponse>> GetCodeSmellSummary(
+        [FromQuery] string? filePath = null,
+        [FromQuery] int? methodLength = null,
+        [FromQuery] int? complexity = null,
+        [FromQuery] int? parameterCount = null,
+        [FromQuery] int? nestingDepth = null,
+        [FromQuery] int? classMembers = null,
+        [FromQuery] int? classLength = null,
+        [FromQuery] int? instancePort = null,
+        [FromQuery] string? solutionName = null,
+        CancellationToken cancellationToken = default)
+    {
+        var parameters = new Dictionary<string, string>();
+
+        if (methodLength.HasValue)
+            parameters["methodLength"] = methodLength.Value.ToString();
+        if (complexity.HasValue)
+            parameters["complexity"] = complexity.Value.ToString();
+        if (parameterCount.HasValue)
+            parameters["parameterCount"] = parameterCount.Value.ToString();
+        if (nestingDepth.HasValue)
+            parameters["nestingDepth"] = nestingDepth.Value.ToString();
+        if (classMembers.HasValue)
+            parameters["classMembers"] = classMembers.Value.ToString();
+        if (classLength.HasValue)
+            parameters["classLength"] = classLength.Value.ToString();
+
+        var request = new RoslynQueryRequest
+        {
+            QueryType = "getcodesmellsummary",
+            FilePath = filePath,
+            Parameters = parameters.Count > 0 ? parameters : null
+        };
+
+        var result = await _bridgeClient.ExecuteQueryAsync(request, instancePort, solutionName, cancellationToken);
+        return Ok(result);
+    }
+
     private DiagnosticsSummary CreateDiagnosticsSummary(object data, string? filePath)
     {
         var summary = new DiagnosticsSummary { FilePath = filePath };
