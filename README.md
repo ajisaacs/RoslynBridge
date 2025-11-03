@@ -129,25 +129,25 @@ curl http://localhost:5001/api/instances
 
 ## Usage
 
-### Quick Start with PowerShell Script
+### Quick Start with rb Script
 
 The easiest way to query your solution:
 
-```powershell
+```bash
 # Navigate to your solution directory
-cd C:\Projects\YourSolution
+cd /c/Projects/YourSolution
 
 # Get diagnostics summary
-.\scripts\rb.ps1 summary
+./scripts/rb summary
 
 # Get all errors
-.\scripts\rb.ps1 errors
+./scripts/rb errors
 
 # Get all warnings
-.\scripts\rb.ps1 warnings
+./scripts/rb warnings
 
 # List projects
-.\scripts\rb.ps1 projects
+./scripts/rb projects
 ```
 
 The script auto-detects your solution name from the current directory.

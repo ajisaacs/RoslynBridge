@@ -6,7 +6,7 @@
     This script copies the canonical skill files from .claude/skills/roslyn-bridge/
     to both:
     1. The user-level skill directory: ~/.claude/skills/roslyn-bridge/ (entire directory)
-    2. The project scripts directory: scripts/rb.ps1 (just the script)
+    2. The project scripts directory: scripts/rb (just the script)
 
 .PARAMETER Force
     Overwrite existing files without prompting
@@ -28,8 +28,8 @@ $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path $PSScriptRoot -Parent
 $skillSource = Join-Path $projectRoot ".claude\skills\roslyn-bridge"
 $userSkillDest = Join-Path $env:USERPROFILE ".claude\skills\roslyn-bridge"
-$projectScriptSource = Join-Path $skillSource "scripts\rb.ps1"
-$projectScriptDest = Join-Path $projectRoot "scripts\rb.ps1"
+$projectScriptSource = Join-Path $skillSource "scripts\rb"
+$projectScriptDest = Join-Path $projectRoot "scripts\rb"
 
 Write-Host "Roslyn Bridge Skill Sync" -ForegroundColor Cyan
 Write-Host "=========================" -ForegroundColor Cyan
@@ -65,13 +65,13 @@ try {
 Write-Host ""
 
 # Sync 2: Skill script → Project script
-Write-Host "2. Syncing rb.ps1 to project scripts directory..." -ForegroundColor Cyan
+Write-Host "2. Syncing rb script to project scripts directory..." -ForegroundColor Cyan
 Write-Host "   Source: $projectScriptSource" -ForegroundColor Gray
 Write-Host "   Dest:   $projectScriptDest" -ForegroundColor Gray
 Write-Host ""
 
 if (-not (Test-Path $projectScriptSource)) {
-    Write-Warning "rb.ps1 not found in skill directory: $projectScriptSource"
+    Write-Warning "rb script not found in skill directory: $projectScriptSource"
     Write-Warning "Skipping project script sync"
 } else {
     try {

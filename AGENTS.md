@@ -13,8 +13,8 @@
   ```
  - Build (VS): Open `RoslynBridge.sln`, set `RoslynBridge` as startup, press F5 to launch the Experimental Instance.
  - Health check (server running in VS):
-   - PowerShell: `$b=@{queryType='getprojects'}|ConvertTo-Json; Invoke-RestMethod -Uri 'http://localhost:59123/query' -Method Post -Body $b -ContentType 'application/json'`
-   - curl (Windows): `curl -X POST http://localhost:59123/query -H "Content-Type: application/json" -d "{\"queryType\":\"getprojects\"}"`
+   - Using rb script: `./scripts/rb projects`
+   - curl: `curl -X POST http://localhost:59123/query -H "Content-Type: application/json" -d "{\"queryType\":\"getprojects\"}"`
 
  ## Coding Style & Naming Conventions
  - Language: C# (net48 VSIX). Use 4‑space indentation; braces on new lines.

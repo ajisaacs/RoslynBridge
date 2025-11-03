@@ -11,12 +11,12 @@ The canonical source of truth for the Roslyn Bridge skill is located at:
 .claude/skills/roslyn-bridge/
 ├── SKILL.md          # Main skill documentation (MODIFY THIS)
 ├── scripts/
-│   └── rb.ps1        # PowerShell helper script (MODIFY THIS)
+│   └── rb            # Shell helper script (MODIFY THIS)
 ```
 
 After making changes to these files, use the sync script to update:
 - Your personal project-level skill at `~/.claude/skills/roslyn-bridge/`
-- The project-level scripts directory at `scripts/rb.ps1`
+- The project-level scripts directory at `scripts/rb`
 
 ### Skill Synchronization
 
@@ -29,7 +29,7 @@ To sync changes from the project's `.claude/skills/roslyn-bridge/` to user-level
 
 This will:
 1. Copy `.claude/skills/roslyn-bridge/` → `~/.claude/skills/roslyn-bridge/`
-2. Copy `.claude/skills/roslyn-bridge/scripts/rb.ps1` → `scripts/rb.ps1`
+2. Copy `.claude/skills/roslyn-bridge/scripts/rb` → `scripts/rb`
 
 ### Why This Workflow?
 
@@ -50,7 +50,7 @@ For personal use across all projects, run the sync script to copy to `~/.claude/
 .claude/skills/roslyn-bridge/
 ├── SKILL.md          # Main skill prompt and documentation
 └── scripts/
-    └── rb.ps1        # PowerShell wrapper for WebAPI
+    └── rb            # Shell script wrapper for WebAPI
 ```
 
 The `SKILL.md` file contains:
@@ -60,4 +60,4 @@ The `SKILL.md` file contains:
 - Workflow patterns and examples
 - Troubleshooting guidance
 
-The `scripts/rb.ps1` helper provides a convenient PowerShell interface to the Roslyn Bridge WebAPI.
+The `scripts/rb` helper provides a convenient shell script interface to the Roslyn Bridge WebAPI.
