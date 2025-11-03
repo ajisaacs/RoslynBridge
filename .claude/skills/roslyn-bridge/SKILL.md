@@ -15,41 +15,54 @@ ALWAYS use Roslyn Bridge for all code searches, references, symbol lookups, and 
 Never fall back to regex/grep unless the bridge explicitly fails.
 
 ## CRITICAL RULES
-1. **ALWAYS USE rb.ps1 FIRST** - Primary method for all code searches, references, and symbol lookups.
-2. **Use curl as fallback** - Only if rb.ps1 doesn't work
+1. **ALWAYS USE rb FIRST** - Primary method for all code searches, references, and symbol lookups.
+2. **Use curl as fallback** - Only if rb doesn't work
 3. **ALWAYS CHECK INSTANCES FIRST** - Verify VS is running and get solution name
 4. **NEVER GUESS** - Always query the API for actual information
 
+## ⚡ NEW: searchcode Simplified Syntax
+The `searchcode` command now accepts the pattern as a positional argument:
+```bash
+# PREFERRED: Positional argument (simple and clean)
+~/.claude/skills/roslyn-bridge/scripts/rb searchcode "MyClassName"
+~/.claude/skills/roslyn-bridge/scripts/rb searchcode "async.*Task" --scope methods
 
-## Quick Start - Use rb.ps1 Helper Script
+# ALSO WORKS: --pattern flag
+~/.claude/skills/roslyn-bridge/scripts/rb searchcode --pattern "MyClassName"
+```
 
-**The rb.ps1 script is available in two locations:**
-- Project scripts directory: `./scripts/rb.ps1`
-- Skill scripts directory: `./.claude/skills/roslyn-bridge/scripts/rb.ps1`
+
+## Quick Start - Use rb Helper Script
+
+**The rb bash script is available in two locations:**
+- Project scripts directory: `./scripts/rb`
+- Skill scripts directory: `~/.claude/skills/roslyn-bridge/scripts/rb`
 
 Both auto-detect the solution from the current directory.
 
 ```bash
 # Step 1: Check what VS instances are running
-powershell -Command "& ./scripts/rb.ps1 instances"
+~/.claude/skills/roslyn-bridge/scripts/rb instances
 
-# Step 2: Use rb.ps1 commands (auto-detects solution from current directory)
-powershell -Command "& ./scripts/rb.ps1 overview"
-powershell -Command "& ./scripts/rb.ps1 summary"
+# Step 2: Use rb commands (auto-detects solution from current directory)
+~/.claude/skills/roslyn-bridge/scripts/rb overview
+~/.claude/skills/roslyn-bridge/scripts/rb summary
 ```
 
 ## Architecture
 
 ```
-Claude → rb.ps1 → WebAPI (:5001) → VS Instance (auto-routed by solution)
+Claude → rb → WebAPI (:5001) → VS Instance (auto-routed by solution)
 ```
 
-- rb.ps1 auto-detects solution name from current directory
+- rb auto-detects solution name from current directory
 - WebAPI runs as Windows Service on port 5001
 - Multiple VS instances can be open simultaneously
 - WebAPI routes requests based on solution name
 
-## Most Common rb.ps1 Commands
+## Most Common rb Commands
+
+**NOTE:** The examples below may show old PowerShell syntax. The current version uses the bash script `~/.claude/skills/roslyn-bridge/scripts/rb`. Replace `powershell -Command "& ./scripts/rb.ps1 command -Param value"` with `~/.claude/skills/roslyn-bridge/scripts/rb command --param value`.
 
 **Basic Diagnostics:**
 ```bash
@@ -116,11 +129,14 @@ powershell -Command "& ./scripts/rb.ps1 callhierarchy -FilePath 'C:\Path\To\File
 
 **Advanced Queries:**
 ```bash
-# Search code with regex
-powershell -Command "& ./scripts/rb.ps1 searchcode -Pattern 'async.*Task' -Scope methods"
+# Search code with regex (PREFERRED: positional argument)
+~/.claude/skills/roslyn-bridge/scripts/rb searchcode "async.*Task" --scope methods
 
-# Search in specific file types
-powershell -Command "& ./scripts/rb.ps1 searchcode -Pattern 'DbContext' -Scope types -FilePattern '*.cs'"
+# Search code with regex (alternative: --pattern flag)
+~/.claude/skills/roslyn-bridge/scripts/rb searchcode --pattern "DbContext" --scope classes
+
+# Simple search
+~/.claude/skills/roslyn-bridge/scripts/rb searchcode "MyClassName"
 ```
 
 **Project Operations:**
