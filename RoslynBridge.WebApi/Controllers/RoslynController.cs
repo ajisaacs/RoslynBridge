@@ -155,6 +155,7 @@ public class RoslynController : ControllerBase
     /// </summary>
     /// <param name="filePath">Optional file path to filter diagnostics</param>
     /// <param name="instancePort">Optional: specific VS instance port to target</param>
+    /// <param name="solutionName">Optional: solution name to route to (e.g., "CutFab")</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Diagnostics summary with counts by severity</returns>
     [HttpGet("diagnostics/summary")]
@@ -162,6 +163,7 @@ public class RoslynController : ControllerBase
     public async Task<ActionResult<RoslynQueryResponse>> GetDiagnosticsSummary(
         [FromQuery] string? filePath = null,
         [FromQuery] int? instancePort = null,
+        [FromQuery] string? solutionName = null,
         CancellationToken cancellationToken = default)
     {
         var request = new RoslynQueryRequest
@@ -169,7 +171,7 @@ public class RoslynController : ControllerBase
             QueryType = "getdiagnostics",
             FilePath = filePath
         };
-        var result = await _bridgeClient.ExecuteQueryAsync(request, instancePort, null, cancellationToken);
+        var result = await _bridgeClient.ExecuteQueryAsync(request, instancePort, solutionName, cancellationToken);
 
         // Server-side: exclude diagnostics from generated files before summarizing
         result = FilterOutGeneratedDiagnostics(result);
@@ -407,33 +409,50 @@ public class RoslynController : ControllerBase
     {
         var summary = new DiagnosticsSummary { FilePath = filePath };
 
+        // Handle JsonElement array (from direct API response)
         if (data is System.Text.Json.JsonElement jsonElement && jsonElement.ValueKind == System.Text.Json.JsonValueKind.Array)
         {
             foreach (var diagnostic in jsonElement.EnumerateArray())
             {
-                if (diagnostic.TryGetProperty("severity", out var severityProp))
+                CountDiagnosticBySeverity(diagnostic, summary);
+            }
+        }
+        // Handle List<JsonElement> (from FilterOutGeneratedDiagnostics)
+        else if (data is System.Collections.IEnumerable enumerable and not string)
+        {
+            foreach (var item in enumerable)
+            {
+                if (item is System.Text.Json.JsonElement diagnostic)
                 {
-                    var severityValue = severityProp.GetString()?.ToLowerInvariant();
-                    switch (severityValue)
-                    {
-                        case "error":
-                            summary.Errors++;
-                            break;
-                        case "warning":
-                            summary.Warnings++;
-                            break;
-                        case "info":
-                            summary.Info++;
-                            break;
-                        case "hidden":
-                            summary.Hidden++;
-                            break;
-                    }
+                    CountDiagnosticBySeverity(diagnostic, summary);
                 }
             }
         }
 
         return summary;
+    }
+
+    private void CountDiagnosticBySeverity(System.Text.Json.JsonElement diagnostic, DiagnosticsSummary summary)
+    {
+        if (diagnostic.TryGetProperty("severity", out var severityProp))
+        {
+            var severityValue = severityProp.GetString()?.ToLowerInvariant();
+            switch (severityValue)
+            {
+                case "error":
+                    summary.Errors++;
+                    break;
+                case "warning":
+                    summary.Warnings++;
+                    break;
+                case "info":
+                    summary.Info++;
+                    break;
+                case "hidden":
+                    summary.Hidden++;
+                    break;
+            }
+        }
     }
 
     private int CountDiagnostics(object data, string? severityFilter)
