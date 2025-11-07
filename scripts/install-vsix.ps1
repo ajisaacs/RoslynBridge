@@ -8,8 +8,8 @@ param(
     # Attempt uninstall before install (default: true)
     [switch]$NoUninstall,
 
-    # Show VSIXInstaller UI/log output
-    [switch]$VerboseOutput,
+    # Suppress VSIXInstaller UI/log output (quiet mode)
+    [switch]$QuietMode,
 
     # Optional explicit log path; defaults to scripts\logs with timestamp
     [string]$LogPath
@@ -115,7 +115,7 @@ $manifestPath = Join-Path $RepoRoot 'RoslynBridge\source.extension.vsixmanifest'
 $extensionId = $manifest.PackageManifest.Metadata.Identity.Id
 
 $commonArgs = @('/shutdownprocesses')
-if (-not $VerboseOutput) { $commonArgs += '/quiet' }
+if ($QuietMode) { $commonArgs += '/quiet' }
 
 # Setup log path
 if (-not $LogPath) {
@@ -183,7 +183,7 @@ if ($installCode -ne 0) {
         Write-Warn '--- end log ---'
     }
     # Fallback: try shell-opening the VSIX to show UI
-    if (-not $VerboseOutput) {
+    if ($QuietMode) {
         Write-Warn 'Falling back to interactive install (UI)'
         Start-Process -FilePath $vsix.FullName
     }
