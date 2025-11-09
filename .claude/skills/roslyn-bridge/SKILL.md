@@ -1,18 +1,42 @@
 ---
 name: roslyn-bridge
-description: Specialized interface for C# and .NET projects. Use this skill for any code
-  analysis, symbol or reference lookup, diagnostics, code quality analysis (code smells,
-  duplicate detection), project queries, or build actions that require semantic accuracy
-  through Roslyn. This replaces all generic text, grep, or regex searches for C# code -
-  always prefer this when working with .NET solutions or Visual Studio projects.
+description: Specialized interface for C# and .NET projects. **AUTOMATICALLY ACTIVATE THIS SKILL at the start of ANY C#/.NET project work** (detecting .sln, .csproj, or C# file operations). Use for code analysis, symbol/reference lookup, diagnostics, code quality analysis (code smells, duplicates, refactoring opportunities), or build actions requiring semantic accuracy through Roslyn. CRITICAL: Always use this for C# projects instead of text-based search tools like Grep/Glob.
 ---
 
 # Roslyn Bridge - C# Code Analysis
 
+## AUTO-ACTIVATION TRIGGERS
+
+**This skill should be AUTOMATICALLY ACTIVATED when:**
+- Working in a directory containing .sln or .csproj files
+- User requests any C# or .NET code analysis, search, or modification
+- About to use Grep/Glob on C# files (.cs extension)
+- User asks about errors, warnings, diagnostics, or build issues
+- User asks to find/search for C# symbols, classes, methods, or properties
+
+**Once activated, this skill's instructions remain active for the entire conversation.**
+
+## When to Use This Skill
+
+**ALWAYS use Roslyn Bridge when:**
+- Finding code smells or refactoring opportunities
+- Analyzing code quality or detecting duplicates
+- Searching for C# symbols, classes, methods, or properties
+- Finding references or implementations
+- Checking diagnostics, errors, or warnings
+- Getting type hierarchies or call graphs
+- Building or managing projects/packages
+
+**NEVER use text-based search (Grep/Glob) for C# code** - Roslyn provides semantic analysis that's faster and more accurate.
 
 ## Usage Directive
 ALWAYS use Roslyn Bridge for all code searches, references, symbol lookups, and diagnostics.
 Never fall back to regex/grep unless the bridge explicitly fails.
+
+## Reference Documentation
+When detailed API specifications or curl fallback examples are needed, load these references:
+- `references/api_endpoints.md` - Complete API endpoint specifications (grep: "GET /api/roslyn")
+- `references/curl_fallback.md` - Direct curl examples when rb unavailable (grep: "curl http")
 
 ## CRITICAL RULES
 1. **ALWAYS USE rb FIRST** - Primary method for all code searches, references, and symbol lookups.
@@ -20,33 +44,57 @@ Never fall back to regex/grep unless the bridge explicitly fails.
 3. **ALWAYS CHECK INSTANCES FIRST** - Verify VS is running and get solution name
 4. **NEVER GUESS** - Always query the API for actual information
 
-## ⚡ NEW: searchcode Simplified Syntax
-The `searchcode` command now accepts the pattern as a positional argument:
-```bash
-# PREFERRED: Positional argument (simple and clean)
-~/.claude/skills/roslyn-bridge/scripts/rb searchcode "MyClassName"
-~/.claude/skills/roslyn-bridge/scripts/rb searchcode "async.*Task" --scope methods
+## 🎯 FINDING SYMBOLS: WHICH COMMAND TO USE?
 
-# ALSO WORKS: --pattern flag
-~/.claude/skills/roslyn-bridge/scripts/rb searchcode --pattern "MyClassName"
+**PRIMARY: Use `symbol --name` for finding types, classes, interfaces, methods, properties:**
+```bash
+# ✅ BEST: Find any symbol by name (most reliable)
+"$USERPROFILE/.claude/skills/roslyn-bridge/scripts/rb" symbol --name Material
+"$USERPROFILE/.claude/skills/roslyn-bridge/scripts/rb" symbol --name IRepository
+"$USERPROFILE/.claude/skills/roslyn-bridge/scripts/rb" symbol --name CalculateTotal
+
+# OR use the convenient aliases:
+"$USERPROFILE/.claude/skills/roslyn-bridge/scripts/rb" find-class Material
+"$USERPROFILE/.claude/skills/roslyn-bridge/scripts/rb" find-type IRepository
+"$USERPROFILE/.claude/skills/roslyn-bridge/scripts/rb" find-symbol CalculateTotal
 ```
+
+**Returns:**
+- Symbol location (file path, line number)
+- Symbol kind (class, interface, method, property, etc.)
+- All references across the solution
+- Full metadata (namespace, accessibility, modifiers)
+
+**ADVANCED: Use `searchcode` for complex pattern matching within code:**
+```bash
+# Pattern matching for code structures (regex)
+"$USERPROFILE/.claude/skills/roslyn-bridge/scripts/rb" searchcode "async.*Task" --scope methods
+"$USERPROFILE/.claude/skills/roslyn-bridge/scripts/rb" searchcode "DbContext" --scope classes
+
+# ⚠️ Note: searchcode is for REGEX PATTERNS, NOT simple name lookups
+# If searching for "class Material", use: rb symbol --name Material
+```
+
+**Rule of thumb:**
+- **Need to find a class/method/property by name?** → `symbol --name ClassName`
+- **Need to find code patterns with regex?** → `searchcode "pattern.*regex"`
 
 
 ## Quick Start - Use rb Helper Script
 
 **The rb bash script is available in two locations:**
 - Project scripts directory: `./scripts/rb`
-- Skill scripts directory: `~/.claude/skills/roslyn-bridge/scripts/rb`
+- Skill scripts directory: `"$USERPROFILE/.claude/skills/roslyn-bridge/scripts/rb"`
 
 Both auto-detect the solution from the current directory.
 
 ```bash
 # Step 1: Check what VS instances are running
-~/.claude/skills/roslyn-bridge/scripts/rb instances
+"$USERPROFILE/.claude/skills/roslyn-bridge/scripts/rb" instances
 
 # Step 2: Use rb commands (auto-detects solution from current directory)
-~/.claude/skills/roslyn-bridge/scripts/rb overview
-~/.claude/skills/roslyn-bridge/scripts/rb summary
+"$USERPROFILE/.claude/skills/roslyn-bridge/scripts/rb" overview
+"$USERPROFILE/.claude/skills/roslyn-bridge/scripts/rb" summary
 ```
 
 ## Architecture
@@ -62,102 +110,92 @@ Claude → rb → WebAPI (:5001) → VS Instance (auto-routed by solution)
 
 ## Most Common rb Commands
 
-**NOTE:** The examples below may show old PowerShell syntax. The current version uses the bash script `~/.claude/skills/roslyn-bridge/scripts/rb`. Replace `powershell -Command "& ./scripts/rb.ps1 command -Param value"` with `~/.claude/skills/roslyn-bridge/scripts/rb command --param value`.
-
 **Basic Diagnostics:**
 ```bash
 # Get diagnostics summary (START HERE)
-powershell -Command "& ./scripts/rb.ps1 summary"
+"$USERPROFILE/.claude/skills/roslyn-bridge/scripts/rb" summary
 
 # Get all errors
-powershell -Command "& ./scripts/rb.ps1 errors"
+"$USERPROFILE/.claude/skills/roslyn-bridge/scripts/rb" errors
 
 # Get all warnings
-powershell -Command "& ./scripts/rb.ps1 warnings"
+"$USERPROFILE/.claude/skills/roslyn-bridge/scripts/rb" warnings
 
 # Get all diagnostics with details
-powershell -Command "& ./scripts/rb.ps1 diagnostics"
+"$USERPROFILE/.claude/skills/roslyn-bridge/scripts/rb" diagnostics
 
 # Get solution overview/statistics
-powershell -Command "& ./scripts/rb.ps1 overview"
+"$USERPROFILE/.claude/skills/roslyn-bridge/scripts/rb" overview
 
 # List all projects
-powershell -Command "& ./scripts/rb.ps1 projects"
+"$USERPROFILE/.claude/skills/roslyn-bridge/scripts/rb" projects
 
 # Check instances
-powershell -Command "& ./scripts/rb.ps1 instances"
+"$USERPROFILE/.claude/skills/roslyn-bridge/scripts/rb" instances
 
 # Health check
-powershell -Command "& ./scripts/rb.ps1 health"
+"$USERPROFILE/.claude/skills/roslyn-bridge/scripts/rb" health
 ```
 
 **Code Quality Analysis:**
 ```bash
 # Get code smells
-powershell -Command "& ./scripts/rb.ps1 codesmells -Top 10 -SeverityFilter High"
-
-# Get code smells summary
-powershell -Command "& ./scripts/rb.ps1 codesmellsummary"
+"$USERPROFILE/.claude/skills/roslyn-bridge/scripts/rb" codesmells --top 10 --severity-filter High
 
 # Find duplicate code
-powershell -Command "& ./scripts/rb.ps1 duplicates -MinLines 5 -Similarity 80"
+"$USERPROFILE/.claude/skills/roslyn-bridge/scripts/rb" duplicates --min-lines 5 --similarity 80
 ```
 
 **Symbol Queries:**
 ```bash
-# Find symbol by name
-powershell -Command "& ./scripts/rb.ps1 symbol -SymbolName Drawing"
+# Find symbol by name (BEST for finding classes/methods/properties)
+"$USERPROFILE/.claude/skills/roslyn-bridge/scripts/rb" symbol --name Drawing
 
 # Get symbol at specific location
-powershell -Command "& ./scripts/rb.ps1 symbolAt -FilePath 'C:\Path\To\File.cs' -Line 10 -Column 5"
+"$USERPROFILE/.claude/skills/roslyn-bridge/scripts/rb" symbolAt --file 'C:\Path\To\File.cs' --line 10 --column 5
 
 # Find all references
-powershell -Command "& ./scripts/rb.ps1 refs -FilePath 'C:\Path\To\File.cs' -Line 10 -Column 5"
+"$USERPROFILE/.claude/skills/roslyn-bridge/scripts/rb" refs --file 'C:\Path\To\File.cs' --line 10 --column 5
 
 # Get type members
-powershell -Command "& ./scripts/rb.ps1 typemembers -SymbolName MyNamespace.MyClass"
+"$USERPROFILE/.claude/skills/roslyn-bridge/scripts/rb" typemembers --name MyNamespace.MyClass
 
 # Get type hierarchy
-powershell -Command "& ./scripts/rb.ps1 typehierarchy -SymbolName MyNamespace.MyClass -HierarchyDirection both"
+"$USERPROFILE/.claude/skills/roslyn-bridge/scripts/rb" typehierarchy --name MyNamespace.MyClass --direction both
 
 # Find implementations
-powershell -Command "& ./scripts/rb.ps1 implementations -SymbolName IMyInterface"
+"$USERPROFILE/.claude/skills/roslyn-bridge/scripts/rb" implementations --name IMyInterface
 
 # Call hierarchy
-powershell -Command "& ./scripts/rb.ps1 callhierarchy -FilePath 'C:\Path\To\File.cs' -Line 10 -Column 5 -CallDirection callers"
+"$USERPROFILE/.claude/skills/roslyn-bridge/scripts/rb" callhierarchy --file 'C:\Path\To\File.cs' --line 10 --column 5 --call-dir callers
 ```
 
 **Advanced Queries:**
 ```bash
-# Search code with regex (PREFERRED: positional argument)
-~/.claude/skills/roslyn-bridge/scripts/rb searchcode "async.*Task" --scope methods
-
-# Search code with regex (alternative: --pattern flag)
-~/.claude/skills/roslyn-bridge/scripts/rb searchcode --pattern "DbContext" --scope classes
-
-# Simple search
-~/.claude/skills/roslyn-bridge/scripts/rb searchcode "MyClassName"
+# Search code with regex patterns (for complex pattern matching)
+"$USERPROFILE/.claude/skills/roslyn-bridge/scripts/rb" searchcode "async.*Task" --scope methods
+"$USERPROFILE/.claude/skills/roslyn-bridge/scripts/rb" searchcode "DbContext" --scope classes
 ```
 
 **Project Operations:**
 ```bash
 # Build project
-powershell -Command "& ./scripts/rb.ps1 build -ProjectName CutFab.Web"
+"$USERPROFILE/.claude/skills/roslyn-bridge/scripts/rb" build --project CutFab.Web
 
 # Add NuGet package
-powershell -Command "& ./scripts/rb.ps1 addpkg -ProjectName CutFab.Web -PackageName Newtonsoft.Json -Version 13.0.3"
+"$USERPROFILE/.claude/skills/roslyn-bridge/scripts/rb" addpkg --project CutFab.Web --package Newtonsoft.Json --version 13.0.3
 
 # Clean project
-powershell -Command "& ./scripts/rb.ps1 clean -ProjectName CutFab.Web"
+"$USERPROFILE/.claude/skills/roslyn-bridge/scripts/rb" clean --project CutFab.Web
 
 # Restore packages
-powershell -Command "& ./scripts/rb.ps1 restore -ProjectName CutFab.Web"
+"$USERPROFILE/.claude/skills/roslyn-bridge/scripts/rb" restore --project CutFab.Web
 ```
 
 **Override Solution Name (if needed):**
 ```bash
 # Use specific solution instead of auto-detect
-powershell -Command "& ./scripts/rb.ps1 summary -SolutionName 'CustomSolution'"
+"$USERPROFILE/.claude/skills/roslyn-bridge/scripts/rb" summary --solution 'CustomSolution'
 ```
 
 ## Workflow Pattern
@@ -166,104 +204,66 @@ powershell -Command "& ./scripts/rb.ps1 summary -SolutionName 'CustomSolution'"
 
 ```bash
 # 1. Check instances to verify VS is running
-powershell -Command "& ./scripts/rb.ps1 instances"
+"$USERPROFILE/.claude/skills/roslyn-bridge/scripts/rb" instances
 
 # 2. Get solution overview
-powershell -Command "& ./scripts/rb.ps1 overview"
+"$USERPROFILE/.claude/skills/roslyn-bridge/scripts/rb" overview
 
 # 3. Get diagnostics summary
-powershell -Command "& ./scripts/rb.ps1 summary"
+"$USERPROFILE/.claude/skills/roslyn-bridge/scripts/rb" summary
 
 # 4. If errors exist, get details
-powershell -Command "& ./scripts/rb.ps1 errors"
+"$USERPROFILE/.claude/skills/roslyn-bridge/scripts/rb" errors
 
-# 5. If you need file paths, get projects list
-powershell -Command "& ./scripts/rb.ps1 projects"
+# 5. For code quality analysis, check for code smells
+"$USERPROFILE/.claude/skills/roslyn-bridge/scripts/rb" codesmells --top 10 --severity-filter High
 
-# 6. Query specific symbols as needed
-powershell -Command "& ./scripts/rb.ps1 symbol -SymbolName ClassName"
+# 6. If you need file paths, get projects list
+"$USERPROFILE/.claude/skills/roslyn-bridge/scripts/rb" projects
+
+# 7. Query specific symbols as needed (BEST for finding classes/methods/properties)
+"$USERPROFILE/.claude/skills/roslyn-bridge/scripts/rb" symbol --name ClassName
 ```
 
 ## Fallback: Direct curl API Calls
 
-**Only use these if rb.ps1 is not available or not working.**
+**Only use these if the rb script is not available or not working.**
 
-Replace `CutFab` with your solution name:
+For detailed curl command examples and troubleshooting, see `references/curl_fallback.md`.
 
+Quick health check:
 ```bash
-# Check instances
+curl http://localhost:5001/api/health
 curl http://localhost:5001/api/instances
-
-# Get diagnostics summary
-curl "http://localhost:5001/api/roslyn/diagnostics/summary?solutionName=CutFab"
-
-# Get all errors only
-curl "http://localhost:5001/api/roslyn/diagnostics?solutionName=CutFab&severity=error"
-
-# List all projects
-curl "http://localhost:5001/api/roslyn/projects?solutionName=CutFab"
-
-# Get solution overview
-curl "http://localhost:5001/api/roslyn/solution/overview?solutionName=CutFab"
-
-# Find symbol by name
-curl "http://localhost:5001/api/roslyn/symbol/search?solutionName=CutFab&symbolName=Drawing"
-
-# Get symbol at specific location
-curl "http://localhost:5001/api/roslyn/symbol?solutionName=CutFab&filePath=C:/Full/Path/File.cs&line=10&column=5"
-
-# Find all references
-curl "http://localhost:5001/api/roslyn/references?solutionName=CutFab&filePath=C:/Full/Path/File.cs&line=10&column=5"
 ```
 
-## All API Endpoints Reference
+## API Endpoints Reference
 
-### Health & Instances
-- `GET /api/health` - Health check (no params)
-- `GET /api/instances` - List all VS instances (no params)
-
-### Diagnostics
-- `GET /api/roslyn/diagnostics/summary?solutionName=X` - Count by severity
-- `GET /api/roslyn/diagnostics?solutionName=X` - All diagnostics
-- `GET /api/roslyn/diagnostics?solutionName=X&severity=error` - Only errors
-- `GET /api/roslyn/diagnostics?solutionName=X&severity=warning` - Only warnings
-
-### Projects & Solution
-- `GET /api/roslyn/projects?solutionName=X` - All projects with file paths
-- `GET /api/roslyn/solution/overview?solutionName=X` - Solution statistics
-
-### Symbols
-- `GET /api/roslyn/symbol/search?solutionName=X&symbolName=Y` - Find symbol by name
-- `GET /api/roslyn/symbol?solutionName=X&filePath=Z&line=N&column=M` - Symbol at location
-- `GET /api/roslyn/references?solutionName=X&filePath=Z&line=N&column=M` - Find references
-
-### Project Operations
-- `POST /api/roslyn/project/build?solutionName=X&projectName=Y` - Build project
-- `POST /api/roslyn/project/package/add?solutionName=X&projectName=Y&packageName=Z&version=V` - Add package
+For complete API endpoint documentation with all parameters and examples, see `references/api_endpoints.md`.
 
 ## Important Notes
 
 - **Line numbers are 1-based** (first line = 1)
 - **Column numbers are 0-based** (first column = 0)
 - **File paths must be absolute** - Get them from projects list
-- **rb.ps1 auto-detects solution** from .sln file in current directory or parent directories
-- **Use backslashes for Windows paths** in rb.ps1: `C:\Path\To\File.cs`
+- **rb script auto-detects solution** from .sln file in current directory or parent directories
+- **Use backslashes for Windows paths** in rb script: `C:\Path\To\File.cs`
 - **Use forward slashes in curl URLs**: `C:/Path/To/File.cs`
 
 ## Troubleshooting
 
-### rb.ps1 Not Found
+### rb Script Not Found
 ```bash
 # Check if it exists in the scripts directory
-ls scripts/rb.ps1
+ls scripts/rb
 
 # Or check in the skill directory
-ls .\.claude\skills\roslyn-bridge\scripts\rb.ps1
+ls "$USERPROFILE/.claude/skills/roslyn-bridge/scripts/rb"
 ```
 
 ### No Instances Found
 ```bash
-powershell -Command "& ./scripts/rb.ps1 instances"
+"$USERPROFILE/.claude/skills/roslyn-bridge/scripts/rb" instances
 # Returns: []
 ```
 **Causes:**
@@ -282,17 +282,19 @@ curl http://localhost:5001/api/health
 ### Wrong Solution Detected
 ```bash
 # Override with specific solution name
-powershell -Command "& ./scripts/rb.ps1 summary -SolutionName 'CorrectSolutionName'"
+"$USERPROFILE/.claude/skills/roslyn-bridge/scripts/rb" summary --solution 'CorrectSolutionName'
 ```
 
 ## DO
 
-- ✅ Always use `powershell -Command "& ./scripts/rb.ps1"` first for all queries
-- ✅ Always check instances first with `powershell -Command "& ./scripts/rb.ps1 instances"`
-- ✅ Use curl as fallback only if rb.ps1 doesn't work
+- ✅ Always use rb script first for all queries: `"$USERPROFILE/.claude/skills/roslyn-bridge/scripts/rb"`
+- ✅ **Use `symbol --name ClassName`** to find classes, interfaces, methods, properties (most reliable)
+- ✅ Use `searchcode` only for regex pattern matching, NOT simple name lookups
+- ✅ Always check instances first with rb instances command
+- ✅ Use curl as fallback only if rb script doesn't work
 - ✅ Get actual diagnostics from API - never guess
 - ✅ Use full absolute file paths from projects list
-- ✅ Let rb.ps1 auto-detect solution when possible
+- ✅ Let rb script auto-detect solution when possible
 
 ## DO NOT
 
@@ -301,4 +303,4 @@ powershell -Command "& ./scripts/rb.ps1 summary -SolutionName 'CorrectSolutionNa
 - ❌ Use relative file paths
 - ❌ Skip checking instances first
 - ❌ Query VS plugin directly (port 59123+) - always use WebAPI
-- ❌ Use curl when rb.ps1 is available and working
+- ❌ Use curl when rb script is available and working
