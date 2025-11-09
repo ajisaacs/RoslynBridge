@@ -1,0 +1,893 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+# Default values
+COMMAND=""
+SOLUTION_NAME=""
+BASE_URL="http://localhost:5001"
+API_URL=""
+SYMBOL_NAME=""
+FILE_PATH=""
+LINE=""
+COLUMN=""
+SEVERITY=""
+LIMIT=""
+OFFSET=""
+PROJECT_NAME=""
+PACKAGE_NAME=""
+VERSION=""
+QUERY_TYPE=""
+INCLUDE_INHERITED=""
+HIERARCHY_DIRECTION=""
+CALL_DIRECTION=""
+SCOPE=""
+PATTERN=""
+DIRECTORY_PATH=""
+CONFIGURATION=""
+METHOD_LENGTH=""
+COMPLEXITY=""
+PARAMETER_COUNT=""
+NESTING_DEPTH=""
+CLASS_MEMBERS=""
+CLASS_LENGTH=""
+SMELL_TYPE=""
+SEVERITY_FILTER=""
+TOP=""
+MIN_LINES=""
+SIMILARITY=""
+CLASS_NAME=""
+NAMESPACE=""
+POSITIONAL_ARG=""
+RAW=0
+
+# Valid commands
+VALID_COMMANDS="help instances health ping summary errors warnings diagnostics projects overview symbol symbolAt refs build addpkg rmpkg clean restore mkdir typemembers typehierarchy implementations callhierarchy symbolcontext namespacetypes searchcode format query codesmells duplicates find-class find-type find-symbol"
+
+show_help() {
+    cat <<'EOF'
+rb - Roslyn Bridge WebAPI helper
+
+Usage:
+  ./scripts/rb instances
+  ./scripts/rb health
+  ./scripts/rb ping
+  ./scripts/rb summary [-s YourSolution]
+  ./scripts/rb errors  [-s YourSolution]
+  ./scripts/rb warnings[-s YourSolution]
+  ./scripts/rb diagnostics [-s YourSolution] [--severity error|warning] [--file path] [--limit N] [--offset M]
+  ./scripts/rb projects [-s YourSolution]
+  ./scripts/rb overview [-s YourSolution]
+  ./scripts/rb symbol --name Name [-s YourSolution]
+  ./scripts/rb find-class ClassName [-s YourSolution]       # Alias for symbol --name
+  ./scripts/rb find-type TypeName [-s YourSolution]         # Alias for symbol --name
+  ./scripts/rb find-symbol SymbolName [-s YourSolution]     # Alias for symbol --name
+  ./scripts/rb symbolAt --file path --line N --column M [-s YourSolution]
+  ./scripts/rb refs --file path --line N --column M [-s YourSolution]
+  ./scripts/rb build --project Name [-s YourSolution]
+  ./scripts/rb addpkg --project Name --package Package [-s YourSolution]
+  ./scripts/rb rmpkg --project Name --package Package [-s YourSolution]
+  ./scripts/rb clean --project Name [-s YourSolution]
+  ./scripts/rb restore --project Name [-s YourSolution]
+  ./scripts/rb mkdir --dir path [-s YourSolution]
+  ./scripts/rb typemembers --name Full.Type.Name [--inherited] [-s YourSolution]
+  ./scripts/rb typehierarchy --name Full.Type.Name [--direction up|down|both] [-s YourSolution]
+  ./scripts/rb implementations [--name Full.Type.Name | --file path --line N --column M] [-s YourSolution]
+  ./scripts/rb callhierarchy --file path --line N --column M [--call-dir callers|callees] [-s YourSolution]
+  ./scripts/rb symbolcontext --file path --line N --column M [-s YourSolution]
+  ./scripts/rb namespacetypes --name Namespace.Name [-s YourSolution]
+  ./scripts/rb searchcode <pattern> [--scope all|methods|classes|properties] [-s YourSolution]
+  ./scripts/rb searchcode --pattern regex [--scope all|methods|classes|properties] [-s YourSolution]
+  ./scripts/rb format --file path [-s YourSolution]
+  ./scripts/rb query --query-type getprojects [-s YourSolution] [--fields '{"key":"value"}']
+  ./scripts/rb codesmells [OPTIONS] [-s YourSolution]
+    OPTIONS:
+      --file path                 # Analyze specific file
+      --project name              # Filter by project
+      --smell-type type           # LongMethod, HighComplexity, etc.
+      --severity-filter level     # Low, Medium, High, Critical
+      --top N                     # Show only worst N smells
+      --method-length N           # Custom threshold (default: 50)
+      --complexity N              # Custom threshold (default: 10)
+      --parameter-count N         # Custom threshold (default: 5)
+      --nesting-depth N           # Custom threshold (default: 4)
+      --class-members N           # Custom threshold (default: 20)
+      --class-length N            # Custom threshold (default: 300)
+  ./scripts/rb duplicates [--min-lines N] [--similarity N] [--class-name Name] [--namespace NS] [-s YourSolution]
+
+Examples:
+  ./scripts/rb summary
+  ./scripts/rb errors
+  ./scripts/rb projects
+  ./scripts/rb symbol --name MyController
+  ./scripts/rb find-class Material              # Find Material class (easier syntax)
+  ./scripts/rb find-type IRepository            # Find IRepository interface/type
+  ./scripts/rb find-symbol CalculateTotal       # Find any symbol by name
+  ./scripts/rb symbolAt --file ./MyApp/Controllers/HomeController.cs --line 10 --column 5
+  ./scripts/rb refs --file ./MyApp/Controllers/HomeController.cs --line 10 --column 5
+  ./scripts/rb build --project MyApp
+  ./scripts/rb query --query-type getdiagnostics --fields '{"severity":"error"}'
+  ./scripts/rb addpkg --project App --package Newtonsoft.Json --version 13.0.3
+
+  # Code Smell Examples:
+  ./scripts/rb codesmells                                # All smells, default thresholds
+  ./scripts/rb codesmells --top 10                       # Top 10 worst offenders
+  ./scripts/rb codesmells --severity-filter High         # Only high/critical severity
+  ./scripts/rb codesmells --project CutFab.Api           # Specific project only
+  ./scripts/rb codesmells --smell-type HighComplexity    # Only complexity issues
+  ./scripts/rb codesmells --method-length 50 --complexity 10 # Custom thresholds
+
+  # Duplicate Detection Examples:
+  ./scripts/rb duplicates                                # Find all duplicates (5+ lines, 80%+ similar)
+  ./scripts/rb duplicates --min-lines 10 --similarity 90 # Stricter detection
+  ./scripts/rb duplicates --min-lines 3 --similarity 70  # More sensitive detection
+  ./scripts/rb duplicates --class-name Controller        # Only in classes containing "Controller"
+  ./scripts/rb duplicates --namespace MyApp.Services     # Only in MyApp.Services namespace
+
+Options:
+  -s, --solution NAME       Solution name
+  -b, --base-url URL        Base URL (default: http://localhost:5001)
+  -a, --api-url URL         API URL (alias for --base-url)
+  --raw                     Output raw response (no JSON formatting)
+EOF
+}
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -h|--help)
+            show_help
+            exit 0
+            ;;
+        -s|--solution)
+            SOLUTION_NAME="$2"
+            shift 2
+            ;;
+        -b|--base-url)
+            BASE_URL="$2"
+            shift 2
+            ;;
+        -a|--api-url)
+            API_URL="$2"
+            shift 2
+            ;;
+        --name)
+            SYMBOL_NAME="$2"
+            shift 2
+            ;;
+        --file)
+            FILE_PATH="$2"
+            shift 2
+            ;;
+        --line)
+            LINE="$2"
+            shift 2
+            ;;
+        --column)
+            COLUMN="$2"
+            shift 2
+            ;;
+        --severity)
+            SEVERITY="$2"
+            shift 2
+            ;;
+        --limit)
+            LIMIT="$2"
+            shift 2
+            ;;
+        --offset)
+            OFFSET="$2"
+            shift 2
+            ;;
+        --project)
+            PROJECT_NAME="$2"
+            shift 2
+            ;;
+        --package)
+            PACKAGE_NAME="$2"
+            shift 2
+            ;;
+        --version)
+            VERSION="$2"
+            shift 2
+            ;;
+        --query-type)
+            QUERY_TYPE="$2"
+            shift 2
+            ;;
+        --fields)
+            FIELDS="$2"
+            shift 2
+            ;;
+        --inherited)
+            INCLUDE_INHERITED="true"
+            shift
+            ;;
+        --direction)
+            HIERARCHY_DIRECTION="$2"
+            shift 2
+            ;;
+        --call-dir)
+            CALL_DIRECTION="$2"
+            shift 2
+            ;;
+        --scope)
+            SCOPE="$2"
+            shift 2
+            ;;
+        --pattern)
+            PATTERN="$2"
+            shift 2
+            ;;
+        --dir)
+            DIRECTORY_PATH="$2"
+            shift 2
+            ;;
+        --configuration)
+            CONFIGURATION="$2"
+            shift 2
+            ;;
+        --method-length)
+            METHOD_LENGTH="$2"
+            shift 2
+            ;;
+        --complexity)
+            COMPLEXITY="$2"
+            shift 2
+            ;;
+        --parameter-count)
+            PARAMETER_COUNT="$2"
+            shift 2
+            ;;
+        --nesting-depth)
+            NESTING_DEPTH="$2"
+            shift 2
+            ;;
+        --class-members)
+            CLASS_MEMBERS="$2"
+            shift 2
+            ;;
+        --class-length)
+            CLASS_LENGTH="$2"
+            shift 2
+            ;;
+        --smell-type)
+            SMELL_TYPE="$2"
+            shift 2
+            ;;
+        --severity-filter)
+            SEVERITY_FILTER="$2"
+            shift 2
+            ;;
+        --top)
+            TOP="$2"
+            shift 2
+            ;;
+        --min-lines)
+            MIN_LINES="$2"
+            shift 2
+            ;;
+        --similarity)
+            SIMILARITY="$2"
+            shift 2
+            ;;
+        --class-name)
+            CLASS_NAME="$2"
+            shift 2
+            ;;
+        --namespace)
+            NAMESPACE="$2"
+            shift 2
+            ;;
+        --raw)
+            RAW=1
+            shift
+            ;;
+        -*)
+            echo "Error: Unknown option: $1" >&2
+            exit 1
+            ;;
+        *)
+            if [[ -z "$COMMAND" ]]; then
+                COMMAND="$1"
+            elif [[ -z "$POSITIONAL_ARG" ]]; then
+                # Store first positional argument after command
+                POSITIONAL_ARG="$1"
+            else
+                echo "Error: Unexpected argument: $1" >&2
+                exit 1
+            fi
+            shift
+            ;;
+    esac
+done
+
+# Default to help if no command
+if [[ -z "$COMMAND" ]]; then
+    COMMAND="help"
+fi
+
+# Validate command
+if [[ ! " $VALID_COMMANDS " =~ " $COMMAND " ]]; then
+    echo "Error: Invalid command: $COMMAND" >&2
+    echo "Run './scripts/rb help' for usage information" >&2
+    exit 1
+fi
+
+# Allow -ApiUrl to override -BaseUrl
+if [[ -n "$API_URL" ]]; then
+    BASE_URL="$API_URL"
+fi
+
+# Get default solution name
+get_default_solution_name() {
+    local current="$PWD"
+
+    # Search current directory first
+    local sln=$(find "$current" -maxdepth 1 -name "*.sln" -type f 2>/dev/null | head -n 1)
+    if [[ -n "$sln" ]]; then
+        basename "$sln" .sln
+        return
+    fi
+
+    # Walk up parent directories
+    while [[ "$current" != "/" && "$current" != "" ]]; do
+        current=$(dirname "$current")
+        sln=$(find "$current" -maxdepth 1 -name "*.sln" -type f 2>/dev/null | head -n 1)
+        if [[ -n "$sln" ]]; then
+            basename "$sln" .sln
+            return
+        fi
+    done
+}
+
+# URL encode function
+urlencode() {
+    local string="$1"
+    local strlen=${#string}
+    local encoded=""
+    local pos c o
+
+    for ((pos=0; pos<strlen; pos++)); do
+        c=${string:$pos:1}
+        case "$c" in
+            [-_.~a-zA-Z0-9])
+                o="$c"
+                ;;
+            *)
+                printf -v o '%%%02X' "'$c"
+                ;;
+        esac
+        encoded+="$o"
+    done
+    echo "$encoded"
+}
+
+# Build query string
+build_query_string() {
+    local -n param_array=$1
+    local query=""
+    local first=1
+
+    for key in "${!param_array[@]}"; do
+        if [[ -n "${param_array[$key]}" ]]; then
+            if [[ $first -eq 1 ]]; then
+                query="?"
+                first=0
+            else
+                query="${query}&"
+            fi
+            query="${query}${key}=$(urlencode "${param_array[$key]}")"
+        fi
+    done
+
+    echo "$query"
+}
+
+# Invoke Roslyn Bridge API
+invoke_roslyn_bridge() {
+    local path="$1"
+    local method="${2:-GET}"
+    local -n param_ref=$3
+    local body="${4:-}"
+
+    local query_string=$(build_query_string param_ref)
+    local uri="${BASE_URL}${path}${query_string}"
+
+    local curl_args=(-s -X "$method")
+
+    if [[ -n "$body" ]]; then
+        curl_args+=(-H "Content-Type: application/json" -d "$body")
+    fi
+
+    curl_args+=("$uri")
+
+    local response
+    if ! response=$(curl "${curl_args[@]}" 2>&1); then
+        echo "Error: Request failed: $response" >&2
+        exit 2
+    fi
+
+    if [[ $RAW -eq 1 ]]; then
+        echo "$response"
+    else
+        # Try to format JSON if jq is available, otherwise output as-is
+        if command -v jq &> /dev/null; then
+            echo "$response" | jq .
+        else
+            echo "$response"
+        fi
+    fi
+}
+
+# Get full path (cross-platform)
+get_full_path() {
+    local path="$1"
+
+    # Try realpath first (Linux and newer Git Bash)
+    if command -v realpath &> /dev/null; then
+        realpath "$path" 2>/dev/null && return
+    fi
+
+    # Fallback for older Git Bash on Windows
+    if command -v cygpath &> /dev/null 2>&1; then
+        cygpath -am "$path" 2>/dev/null && return
+    fi
+
+    # Last resort: use readlink or basic expansion
+    if [[ -e "$path" ]]; then
+        if command -v readlink &> /dev/null; then
+            readlink -f "$path" 2>/dev/null && return
+        fi
+        # Basic expansion
+        cd "$(dirname "$path")" && echo "$PWD/$(basename "$path")"
+    else
+        echo "$path"
+    fi
+}
+
+# Normalize path (convert backslashes to forward slashes)
+normalize_path() {
+    echo "$1" | sed 's/\\/\//g'
+}
+
+# Show help and exit
+if [[ "$COMMAND" == "help" ]]; then
+    show_help
+    exit 0
+fi
+
+# Check if solution name is required and set default if needed
+REQUIRES_SOLUTION="summary errors warnings diagnostics projects overview symbol symbolAt refs build addpkg rmpkg clean restore mkdir typemembers typehierarchy implementations callhierarchy symbolcontext namespacetypes searchcode format query codesmells duplicates find-class find-type find-symbol"
+
+if [[ " $REQUIRES_SOLUTION " =~ " $COMMAND " ]] && [[ -z "$SOLUTION_NAME" ]]; then
+    SOLUTION_NAME=$(get_default_solution_name)
+    if [[ -z "$SOLUTION_NAME" ]]; then
+        echo "Error: Could not detect solution name. Run from a folder containing a .sln (or a subfolder) or specify -s/--solution explicitly." >&2
+        exit 2
+    fi
+fi
+
+# Execute command
+case "$COMMAND" in
+    instances)
+        declare -A params=()
+        invoke_roslyn_bridge "/api/instances" "GET" params
+        ;;
+    health)
+        declare -A params=()
+        invoke_roslyn_bridge "/api/health" "GET" params
+        ;;
+    ping)
+        declare -A params=()
+        invoke_roslyn_bridge "/api/health/ping" "GET" params
+        ;;
+    summary)
+        declare -A params=([solutionName]="$SOLUTION_NAME")
+        invoke_roslyn_bridge "/api/roslyn/diagnostics/summary" "GET" params
+        ;;
+    errors)
+        declare -A params=([solutionName]="$SOLUTION_NAME" [severity]="error")
+        invoke_roslyn_bridge "/api/roslyn/diagnostics" "GET" params
+        ;;
+    warnings)
+        declare -A params=([solutionName]="$SOLUTION_NAME" [severity]="warning")
+        invoke_roslyn_bridge "/api/roslyn/diagnostics" "GET" params
+        ;;
+    diagnostics)
+        declare -A params=([solutionName]="$SOLUTION_NAME")
+        [[ -n "$SEVERITY" ]] && params[severity]="$SEVERITY"
+        if [[ -n "$FILE_PATH" ]]; then
+            full_path=$(get_full_path "$FILE_PATH")
+            params[filePath]=$(normalize_path "$full_path")
+        fi
+        [[ -n "$LIMIT" ]] && params[limit]="$LIMIT"
+        [[ -n "$OFFSET" ]] && params[offset]="$OFFSET"
+        invoke_roslyn_bridge "/api/roslyn/diagnostics" "GET" params
+        ;;
+    projects)
+        declare -A params=([solutionName]="$SOLUTION_NAME")
+        invoke_roslyn_bridge "/api/roslyn/projects" "GET" params
+        ;;
+    overview)
+        declare -A params=([solutionName]="$SOLUTION_NAME")
+        invoke_roslyn_bridge "/api/roslyn/solution/overview" "GET" params
+        ;;
+    symbol)
+        if [[ -z "$SYMBOL_NAME" ]]; then
+            echo "Error: symbol requires --name" >&2
+            exit 2
+        fi
+        declare -A params=([solutionName]="$SOLUTION_NAME" [symbolName]="$SYMBOL_NAME")
+        invoke_roslyn_bridge "/api/roslyn/symbol/search" "GET" params
+        ;;
+    find-class|find-type|find-symbol)
+        # Aliases for symbol --name that accept positional argument
+        if [[ -n "$POSITIONAL_ARG" ]]; then
+            SYMBOL_NAME="$POSITIONAL_ARG"
+        fi
+        if [[ -z "$SYMBOL_NAME" ]]; then
+            echo "Error: $COMMAND requires a symbol name as argument" >&2
+            echo "Usage: rb $COMMAND SymbolName" >&2
+            exit 2
+        fi
+        declare -A params=([solutionName]="$SOLUTION_NAME" [symbolName]="$SYMBOL_NAME")
+        invoke_roslyn_bridge "/api/roslyn/symbol/search" "GET" params
+        ;;
+    symbolAt)
+        if [[ -z "$FILE_PATH" || -z "$LINE" || -z "$COLUMN" ]]; then
+            echo "Error: symbolAt requires --file --line --column" >&2
+            exit 2
+        fi
+        full_path=$(get_full_path "$FILE_PATH")
+        declare -A params=([solutionName]="$SOLUTION_NAME" [filePath]=$(normalize_path "$full_path") [line]="$LINE" [column]="$COLUMN")
+        invoke_roslyn_bridge "/api/roslyn/symbol" "GET" params
+        ;;
+    refs)
+        if [[ -z "$FILE_PATH" || -z "$LINE" || -z "$COLUMN" ]]; then
+            echo "Error: refs requires --file --line --column" >&2
+            exit 2
+        fi
+        full_path=$(get_full_path "$FILE_PATH")
+        declare -A params=([solutionName]="$SOLUTION_NAME" [filePath]=$(normalize_path "$full_path") [line]="$LINE" [column]="$COLUMN")
+        invoke_roslyn_bridge "/api/roslyn/references" "GET" params
+        ;;
+    build)
+        if [[ -z "$PROJECT_NAME" ]]; then
+            echo "Error: build requires --project" >&2
+            exit 2
+        fi
+        declare -A params=([solutionName]="$SOLUTION_NAME" [projectName]="$PROJECT_NAME")
+        [[ -n "$CONFIGURATION" ]] && params[configuration]="$CONFIGURATION"
+        invoke_roslyn_bridge "/api/roslyn/project/build" "POST" params
+        ;;
+    addpkg)
+        if [[ -z "$PROJECT_NAME" || -z "$PACKAGE_NAME" ]]; then
+            echo "Error: addpkg requires --project and --package" >&2
+            exit 2
+        fi
+        declare -A params=([solutionName]="$SOLUTION_NAME" [projectName]="$PROJECT_NAME" [packageName]="$PACKAGE_NAME")
+        [[ -n "$VERSION" ]] && params[version]="$VERSION"
+        invoke_roslyn_bridge "/api/roslyn/project/package/add" "POST" params
+        ;;
+    rmpkg)
+        if [[ -z "$PROJECT_NAME" || -z "$PACKAGE_NAME" ]]; then
+            echo "Error: rmpkg requires --project and --package" >&2
+            exit 2
+        fi
+        declare -A params=([solutionName]="$SOLUTION_NAME")
+        body=$(cat <<EOF
+{
+  "queryType": "removenugetpackage",
+  "projectName": "$PROJECT_NAME",
+  "packageName": "$PACKAGE_NAME"
+}
+EOF
+)
+        invoke_roslyn_bridge "/api/roslyn/query" "POST" params "$body"
+        ;;
+    clean)
+        if [[ -z "$PROJECT_NAME" ]]; then
+            echo "Error: clean requires --project" >&2
+            exit 2
+        fi
+        declare -A params=([solutionName]="$SOLUTION_NAME")
+        body=$(cat <<EOF
+{
+  "queryType": "cleanproject",
+  "projectName": "$PROJECT_NAME"
+}
+EOF
+)
+        invoke_roslyn_bridge "/api/roslyn/query" "POST" params "$body"
+        ;;
+    restore)
+        if [[ -z "$PROJECT_NAME" ]]; then
+            echo "Error: restore requires --project" >&2
+            exit 2
+        fi
+        declare -A params=([solutionName]="$SOLUTION_NAME")
+        body=$(cat <<EOF
+{
+  "queryType": "restorepackages",
+  "projectName": "$PROJECT_NAME"
+}
+EOF
+)
+        invoke_roslyn_bridge "/api/roslyn/query" "POST" params "$body"
+        ;;
+    mkdir)
+        if [[ -z "$DIRECTORY_PATH" ]]; then
+            echo "Error: mkdir requires --dir" >&2
+            exit 2
+        fi
+        declare -A params=([solutionName]="$SOLUTION_NAME")
+        body=$(cat <<EOF
+{
+  "queryType": "createdirectory",
+  "directoryPath": "$DIRECTORY_PATH"
+}
+EOF
+)
+        invoke_roslyn_bridge "/api/roslyn/query" "POST" params "$body"
+        ;;
+    typemembers)
+        if [[ -z "$SYMBOL_NAME" ]]; then
+            echo "Error: typemembers requires --name" >&2
+            exit 2
+        fi
+        declare -A params=([solutionName]="$SOLUTION_NAME")
+        if [[ -n "$INCLUDE_INHERITED" ]]; then
+            body=$(cat <<EOF
+{
+  "queryType": "gettypemembers",
+  "symbolName": "$SYMBOL_NAME",
+  "parameters": {
+    "includeInherited": "true"
+  }
+}
+EOF
+)
+        else
+            body=$(cat <<EOF
+{
+  "queryType": "gettypemembers",
+  "symbolName": "$SYMBOL_NAME"
+}
+EOF
+)
+        fi
+        invoke_roslyn_bridge "/api/roslyn/query" "POST" params "$body"
+        ;;
+    typehierarchy)
+        if [[ -z "$SYMBOL_NAME" ]]; then
+            echo "Error: typehierarchy requires --name" >&2
+            exit 2
+        fi
+        declare -A params=([solutionName]="$SOLUTION_NAME")
+        if [[ -n "$HIERARCHY_DIRECTION" ]]; then
+            body=$(cat <<EOF
+{
+  "queryType": "gettypehierarchy",
+  "symbolName": "$SYMBOL_NAME",
+  "parameters": {
+    "direction": "$HIERARCHY_DIRECTION"
+  }
+}
+EOF
+)
+        else
+            body=$(cat <<EOF
+{
+  "queryType": "gettypehierarchy",
+  "symbolName": "$SYMBOL_NAME"
+}
+EOF
+)
+        fi
+        invoke_roslyn_bridge "/api/roslyn/query" "POST" params "$body"
+        ;;
+    implementations)
+        if [[ -z "$SYMBOL_NAME" && (-z "$FILE_PATH" || -z "$LINE" || -z "$COLUMN") ]]; then
+            echo "Error: implementations requires --name or --file --line --column" >&2
+            exit 2
+        fi
+        declare -A params=([solutionName]="$SOLUTION_NAME")
+        if [[ -n "$SYMBOL_NAME" ]]; then
+            body=$(cat <<EOF
+{
+  "queryType": "findimplementations",
+  "symbolName": "$SYMBOL_NAME"
+}
+EOF
+)
+        else
+            full_path=$(get_full_path "$FILE_PATH")
+            normalized_path=$(normalize_path "$full_path")
+            body=$(cat <<EOF
+{
+  "queryType": "findimplementations",
+  "filePath": "$normalized_path",
+  "line": $LINE,
+  "column": $COLUMN
+}
+EOF
+)
+        fi
+        invoke_roslyn_bridge "/api/roslyn/query" "POST" params "$body"
+        ;;
+    callhierarchy)
+        if [[ -z "$FILE_PATH" || -z "$LINE" || -z "$COLUMN" ]]; then
+            echo "Error: callhierarchy requires --file --line --column" >&2
+            exit 2
+        fi
+        full_path=$(get_full_path "$FILE_PATH")
+        normalized_path=$(normalize_path "$full_path")
+        declare -A params=([solutionName]="$SOLUTION_NAME")
+        if [[ -n "$CALL_DIRECTION" ]]; then
+            body=$(cat <<EOF
+{
+  "queryType": "getcallhierarchy",
+  "filePath": "$normalized_path",
+  "line": $LINE,
+  "column": $COLUMN,
+  "parameters": {
+    "direction": "$CALL_DIRECTION"
+  }
+}
+EOF
+)
+        else
+            body=$(cat <<EOF
+{
+  "queryType": "getcallhierarchy",
+  "filePath": "$normalized_path",
+  "line": $LINE,
+  "column": $COLUMN
+}
+EOF
+)
+        fi
+        invoke_roslyn_bridge "/api/roslyn/query" "POST" params "$body"
+        ;;
+    symbolcontext)
+        if [[ -z "$FILE_PATH" || -z "$LINE" || -z "$COLUMN" ]]; then
+            echo "Error: symbolcontext requires --file --line --column" >&2
+            exit 2
+        fi
+        full_path=$(get_full_path "$FILE_PATH")
+        normalized_path=$(normalize_path "$full_path")
+        declare -A params=([solutionName]="$SOLUTION_NAME")
+        body=$(cat <<EOF
+{
+  "queryType": "getsymbolcontext",
+  "filePath": "$normalized_path",
+  "line": $LINE,
+  "column": $COLUMN
+}
+EOF
+)
+        invoke_roslyn_bridge "/api/roslyn/query" "POST" params "$body"
+        ;;
+    namespacetypes)
+        if [[ -z "$SYMBOL_NAME" ]]; then
+            echo "Error: namespacetypes requires --name (namespace)" >&2
+            exit 2
+        fi
+        declare -A params=([solutionName]="$SOLUTION_NAME")
+        body=$(cat <<EOF
+{
+  "queryType": "getnamespacetypes",
+  "symbolName": "$SYMBOL_NAME"
+}
+EOF
+)
+        invoke_roslyn_bridge "/api/roslyn/query" "POST" params "$body"
+        ;;
+    searchcode)
+        # Allow pattern as positional argument or via --pattern flag
+        if [[ -z "$PATTERN" && -n "$POSITIONAL_ARG" ]]; then
+            PATTERN="$POSITIONAL_ARG"
+        fi
+        if [[ -z "$PATTERN" ]]; then
+            echo "Error: searchcode requires pattern (as positional arg or --pattern)" >&2
+            exit 2
+        fi
+
+        # Warn if pattern looks like a simple identifier (no regex chars)
+        if [[ "$PATTERN" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+            echo "Note: Pattern '$PATTERN' looks like a simple identifier." >&2
+            echo "      For finding classes/methods/properties by name, use:" >&2
+            echo "      rb symbol --name $PATTERN" >&2
+            echo "      or: rb find-class $PATTERN" >&2
+            echo "" >&2
+            echo "Searching with searchcode anyway..." >&2
+            echo "" >&2
+        fi
+
+        declare -A params=([solutionName]="$SOLUTION_NAME")
+        if [[ -n "$SCOPE" ]]; then
+            body=$(cat <<EOF
+{
+  "queryType": "searchcode",
+  "symbolName": "$PATTERN",
+  "parameters": {
+    "scope": "$SCOPE"
+  }
+}
+EOF
+)
+        else
+            body=$(cat <<EOF
+{
+  "queryType": "searchcode",
+  "symbolName": "$PATTERN"
+}
+EOF
+)
+        fi
+        invoke_roslyn_bridge "/api/roslyn/query" "POST" params "$body"
+        ;;
+    format)
+        if [[ -z "$FILE_PATH" ]]; then
+            echo "Error: format requires --file" >&2
+            exit 2
+        fi
+        full_path=$(get_full_path "$FILE_PATH")
+        normalized_path=$(normalize_path "$full_path")
+        declare -A params=([solutionName]="$SOLUTION_NAME")
+        body=$(cat <<EOF
+{
+  "queryType": "formatdocument",
+  "filePath": "$normalized_path"
+}
+EOF
+)
+        invoke_roslyn_bridge "/api/roslyn/query" "POST" params "$body"
+        ;;
+    query)
+        if [[ -z "$QUERY_TYPE" ]]; then
+            echo "Error: query requires --query-type" >&2
+            exit 2
+        fi
+        declare -A params=([solutionName]="$SOLUTION_NAME")
+        if [[ -n "${FIELDS:-}" ]]; then
+            # Merge FIELDS JSON with queryType
+            body=$(echo "$FIELDS" | jq --arg qt "$QUERY_TYPE" '. + {queryType: $qt}')
+        else
+            body=$(cat <<EOF
+{
+  "queryType": "$QUERY_TYPE"
+}
+EOF
+)
+        fi
+        invoke_roslyn_bridge "/api/roslyn/query" "POST" params "$body"
+        ;;
+    codesmells)
+        declare -A params=([solutionName]="$SOLUTION_NAME")
+        if [[ -n "$FILE_PATH" ]]; then
+            full_path=$(get_full_path "$FILE_PATH")
+            params[filePath]=$(normalize_path "$full_path")
+        fi
+        [[ -n "$PROJECT_NAME" ]] && params[projectName]="$PROJECT_NAME"
+        [[ -n "$SMELL_TYPE" ]] && params[smellType]="$SMELL_TYPE"
+        [[ -n "$SEVERITY_FILTER" ]] && params[severity]="$SEVERITY_FILTER"
+        [[ -n "$TOP" ]] && params[top]="$TOP"
+        [[ -n "$METHOD_LENGTH" ]] && params[methodLength]="$METHOD_LENGTH"
+        [[ -n "$COMPLEXITY" ]] && params[complexity]="$COMPLEXITY"
+        [[ -n "$PARAMETER_COUNT" ]] && params[parameterCount]="$PARAMETER_COUNT"
+        [[ -n "$NESTING_DEPTH" ]] && params[nestingDepth]="$NESTING_DEPTH"
+        [[ -n "$CLASS_MEMBERS" ]] && params[classMembers]="$CLASS_MEMBERS"
+        [[ -n "$CLASS_LENGTH" ]] && params[classLength]="$CLASS_LENGTH"
+        invoke_roslyn_bridge "/api/roslyn/codesmells" "GET" params
+        ;;
+    duplicates)
+        declare -A params=([solutionName]="$SOLUTION_NAME")
+        [[ -n "$MIN_LINES" ]] && params[minLines]="$MIN_LINES"
+        [[ -n "$SIMILARITY" ]] && params[similarity]="$SIMILARITY"
+        [[ -n "$CLASS_NAME" ]] && params[className]="$CLASS_NAME"
+        [[ -n "$NAMESPACE" ]] && params[namespace]="$NAMESPACE"
+        invoke_roslyn_bridge "/api/roslyn/duplicates" "GET" params
+        ;;
+esac
