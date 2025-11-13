@@ -59,6 +59,12 @@ public class RoslynController : ControllerBase
             _logger.LogWarning("Query failed: {Error}", result.Error);
         }
 
+        // Filter out results from generated files for searchcode queries
+        if (request.QueryType?.Equals("searchcode", StringComparison.OrdinalIgnoreCase) == true && result.Success)
+        {
+            result = FilterOutGeneratedSymbols(result);
+        }
+
         return Ok(result);
     }
 
@@ -656,6 +662,62 @@ public class RoslynController : ControllerBase
         return response;
     }
 
+    private RoslynQueryResponse FilterOutGeneratedSymbols(RoslynQueryResponse response)
+    {
+        if (response.Data is System.Text.Json.JsonElement json && json.ValueKind == System.Text.Json.JsonValueKind.Array)
+        {
+            var filtered = new List<System.Text.Json.JsonElement>();
+            int removed = 0;
+
+            foreach (var symbolInfo in json.EnumerateArray())
+            {
+                bool hasNonGeneratedLocation = false;
+
+                // Check if symbol has any locations in non-generated files
+                if (symbolInfo.ValueKind == System.Text.Json.JsonValueKind.Object &&
+                    symbolInfo.TryGetProperty("locations", out var locations) &&
+                    locations.ValueKind == System.Text.Json.JsonValueKind.Array)
+                {
+                    foreach (var location in locations.EnumerateArray())
+                    {
+                        string? filePath = null;
+                        if (location.ValueKind == System.Text.Json.JsonValueKind.Object &&
+                            location.TryGetProperty("filePath", out var fp))
+                        {
+                            filePath = fp.GetString();
+                        }
+
+                        if (!IsGeneratedPath(filePath))
+                        {
+                            hasNonGeneratedLocation = true;
+                            break;
+                        }
+                    }
+                }
+
+                // Only include symbols that have at least one location in a non-generated file
+                if (hasNonGeneratedLocation)
+                {
+                    filtered.Add(symbolInfo);
+                }
+                else
+                {
+                    removed++;
+                }
+            }
+
+            return new RoslynQueryResponse
+            {
+                Success = response.Success,
+                Data = filtered,
+                Message = removed > 0 ? $"Filtered out {removed} symbol(s) from generated files" : response.Message,
+                Error = response.Error
+            };
+        }
+
+        return response;
+    }
+
     private static bool IsGeneratedPath(string? filePath)
     {
         if (string.IsNullOrEmpty(filePath)) return false;
@@ -675,6 +737,9 @@ public class RoslynController : ControllerBase
 
             // Razor generated files often include .razor.*.g.cs
             if (p.Contains(".razor") && p.EndsWith(".g.cs")) return true;
+
+            // Razor IDE generated files like Index.cshtml.bKd0EsnkDmEnFOH0.ide.g.cs
+            if (p.Contains(".ide.g.cs")) return true;
 
             // EF Core migrations designer/snapshot files
             if (p.Contains("\\migrations\\") && (p.EndsWith(".designer.cs") || p.EndsWith("modelsnapshot.cs"))) return true;
