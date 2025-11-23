@@ -17,6 +17,7 @@ namespace RoslynBridge.Constants
         public const string GetSymbol = "getsymbol";
         public const string GetDocument = "getdocument";
         public const string GetProjects = "getprojects";
+        public const string GetFiles = "getfiles";
         public const string GetDiagnostics = "getdiagnostics";
         public const string FindReferences = "findreferences";
         public const string GetSemanticModel = "getsemanticmodel";

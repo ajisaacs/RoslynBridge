@@ -88,6 +88,43 @@ public class RoslynController : ControllerBase
     }
 
     /// <summary>
+    /// Get files from projects with optional filtering
+    /// </summary>
+    /// <param name="projectName">Optional project name to filter files</param>
+    /// <param name="path">Optional path filter (case-insensitive contains match)</param>
+    /// <param name="pattern">Optional filename pattern (glob-style: * and ? wildcards)</param>
+    /// <param name="instancePort">Optional: specific VS instance port to target</param>
+    /// <param name="solutionName">Optional: solution name to route to (e.g., "RoslynBridge")</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>List of file paths matching the filters</returns>
+    [HttpGet("files")]
+    [ProducesResponseType(typeof(RoslynQueryResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<RoslynQueryResponse>> GetFiles(
+        [FromQuery] string? projectName = null,
+        [FromQuery] string? path = null,
+        [FromQuery] string? pattern = null,
+        [FromQuery] int? instancePort = null,
+        [FromQuery] string? solutionName = null,
+        CancellationToken cancellationToken = default)
+    {
+        var parameters = new Dictionary<string, string>();
+        if (!string.IsNullOrEmpty(path))
+            parameters["path"] = path;
+        if (!string.IsNullOrEmpty(pattern))
+            parameters["pattern"] = pattern;
+
+        var request = new RoslynQueryRequest
+        {
+            QueryType = "getfiles",
+            ProjectName = projectName,
+            Parameters = parameters.Count > 0 ? parameters : null
+        };
+
+        var result = await _bridgeClient.ExecuteQueryAsync(request, instancePort, solutionName, cancellationToken);
+        return Ok(result);
+    }
+
+    /// <summary>
     /// Get solution overview
     /// </summary>
     /// <param name="instancePort">Optional: specific VS instance port to target</param>

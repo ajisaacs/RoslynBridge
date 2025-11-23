@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.IO;
 using Microsoft.VisualStudio.Shell;
 using RoslynBridge.Models;
 
@@ -68,6 +69,75 @@ namespace RoslynBridge.Services
             }).ToList();
 
             return CreateSuccessResponse(projects);
+        }
+
+        public async Task<QueryResponse> GetFilesAsync(QueryRequest request)
+        {
+            await Task.CompletedTask;
+
+            // Get the project name filter if provided
+            string? projectNameFilter = request.ProjectName;
+
+            // Get path and pattern filters from parameters
+            string? pathFilter = null;
+            string? patternFilter = null;
+            request.Parameters?.TryGetValue("path", out pathFilter);
+            request.Parameters?.TryGetValue("pattern", out patternFilter);
+
+            var projects = Workspace?.CurrentSolution.Projects ?? Enumerable.Empty<Project>();
+
+            // Filter by project name if provided
+            if (!string.IsNullOrEmpty(projectNameFilter))
+            {
+                projects = projects.Where(p => p.Name == projectNameFilter);
+            }
+
+            // Get all documents from the filtered projects
+            var allDocuments = projects.SelectMany(p => p.Documents);
+
+            // Apply path filter if provided
+            if (!string.IsNullOrEmpty(pathFilter))
+            {
+                // Normalize path separators to forward slashes for cross-platform compatibility
+                var normalizedFilter = pathFilter.Replace('\\', '/').ToLower();
+
+                allDocuments = allDocuments.Where(d =>
+                {
+                    if (d.FilePath == null) return false;
+                    var normalizedPath = d.FilePath.Replace('\\', '/').ToLower();
+                    return normalizedPath.Contains(normalizedFilter);
+                });
+            }
+
+            // Apply pattern filter (glob-style) if provided
+            if (!string.IsNullOrEmpty(patternFilter))
+            {
+                allDocuments = allDocuments.Where(d =>
+                {
+                    if (d.FilePath == null) return false;
+                    var fileName = System.IO.Path.GetFileName(d.FilePath);
+                    return MatchesGlobPattern(fileName, patternFilter);
+                });
+            }
+
+            var filePaths = allDocuments.Select(d => d.FilePath ?? string.Empty).ToList();
+
+            return CreateSuccessResponse(filePaths);
+        }
+
+        private bool MatchesGlobPattern(string fileName, string pattern)
+        {
+            // Convert glob pattern to regex
+            // * matches any sequence of characters
+            // ? matches any single character
+            var regexPattern = "^" + System.Text.RegularExpressions.Regex.Escape(pattern)
+                .Replace("\\*", ".*")
+                .Replace("\\?", ".") + "$";
+
+            return System.Text.RegularExpressions.Regex.IsMatch(
+                fileName,
+                regexPattern,
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
         }
 
         public async Task<QueryResponse> GetSyntaxTreeAsync(QueryRequest request)

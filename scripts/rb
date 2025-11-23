@@ -23,6 +23,7 @@ HIERARCHY_DIRECTION=""
 CALL_DIRECTION=""
 SCOPE=""
 PATTERN=""
+PATH_FILTER=""
 DIRECTORY_PATH=""
 CONFIGURATION=""
 METHOD_LENGTH=""
@@ -42,7 +43,7 @@ POSITIONAL_ARG=""
 RAW=0
 
 # Valid commands
-VALID_COMMANDS="help instances health ping summary errors warnings diagnostics projects overview symbol symbolAt refs build addpkg rmpkg clean restore mkdir typemembers typehierarchy implementations callhierarchy symbolcontext namespacetypes searchcode format query codesmells duplicates find-class find-type find-symbol"
+VALID_COMMANDS="help instances health ping summary errors warnings diagnostics projects files overview symbol symbolAt refs build addpkg rmpkg clean restore mkdir typemembers typehierarchy implementations callhierarchy symbolcontext namespacetypes searchcode format query codesmells duplicates find-class find-type find-symbol"
 
 show_help() {
     cat <<'EOF'
@@ -57,6 +58,7 @@ Usage:
   ./scripts/rb warnings[-s YourSolution]
   ./scripts/rb diagnostics [-s YourSolution] [--severity error|warning] [--file path] [--limit N] [--offset M]
   ./scripts/rb projects [-s YourSolution]
+  ./scripts/rb files [--project Name] [--path PathFilter] [--pattern FilePattern] [-s YourSolution]
   ./scripts/rb overview [-s YourSolution]
   ./scripts/rb symbol --name Name [-s YourSolution]
   ./scripts/rb find-class ClassName [-s YourSolution]       # Alias for symbol --name
@@ -99,6 +101,11 @@ Examples:
   ./scripts/rb summary
   ./scripts/rb errors
   ./scripts/rb projects
+  ./scripts/rb files                                    # All files in solution
+  ./scripts/rb files --project LaserQuote.Web           # Files in specific project
+  ./scripts/rb files --path "Pages/Parts"               # Files with path containing "Pages/Parts"
+  ./scripts/rb files --pattern "*Index*"                # Files matching pattern
+  ./scripts/rb files --project LaserQuote.Web --path "Pages/Parts" --pattern "*Index*"  # Combined filters
   ./scripts/rb symbol --name MyController
   ./scripts/rb find-class Material              # Find Material class (easier syntax)
   ./scripts/rb find-type IRepository            # Find IRepository interface/type
@@ -217,6 +224,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --pattern)
             PATTERN="$2"
+            shift 2
+            ;;
+        --path)
+            PATH_FILTER="$2"
             shift 2
             ;;
         --dir)
@@ -458,7 +469,7 @@ if [[ "$COMMAND" == "help" ]]; then
 fi
 
 # Check if solution name is required and set default if needed
-REQUIRES_SOLUTION="summary errors warnings diagnostics projects overview symbol symbolAt refs build addpkg rmpkg clean restore mkdir typemembers typehierarchy implementations callhierarchy symbolcontext namespacetypes searchcode format query codesmells duplicates find-class find-type find-symbol"
+REQUIRES_SOLUTION="summary errors warnings diagnostics projects files overview symbol symbolAt refs build addpkg rmpkg clean restore mkdir typemembers typehierarchy implementations callhierarchy symbolcontext namespacetypes searchcode format query codesmells duplicates find-class find-type find-symbol"
 
 if [[ " $REQUIRES_SOLUTION " =~ " $COMMAND " ]] && [[ -z "$SOLUTION_NAME" ]]; then
     SOLUTION_NAME=$(get_default_solution_name)
@@ -508,6 +519,13 @@ case "$COMMAND" in
     projects)
         declare -A params=([solutionName]="$SOLUTION_NAME")
         invoke_roslyn_bridge "/api/roslyn/projects" "GET" params
+        ;;
+    files)
+        declare -A params=([solutionName]="$SOLUTION_NAME")
+        [[ -n "$PROJECT_NAME" ]] && params[projectName]="$PROJECT_NAME"
+        [[ -n "$PATH_FILTER" ]] && params[path]="$PATH_FILTER"
+        [[ -n "$PATTERN" ]] && params[pattern]="$PATTERN"
+        invoke_roslyn_bridge "/api/roslyn/files" "GET" params
         ;;
     overview)
         declare -A params=([solutionName]="$SOLUTION_NAME")

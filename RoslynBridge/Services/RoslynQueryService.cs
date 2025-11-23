@@ -91,6 +91,7 @@ namespace RoslynBridge.Services
                     // Document queries
                     QueryTypes.GetDocument => await _documentService.GetDocumentInfoAsync(request),
                     QueryTypes.GetProjects => await _documentService.GetProjectsAsync(request),
+                    QueryTypes.GetFiles => await _documentService.GetFilesAsync(request),
                     QueryTypes.GetSemanticModel => await _documentService.GetSemanticModelAsync(request),
                     QueryTypes.GetSyntaxTree => await _documentService.GetSyntaxTreeAsync(request),
                     QueryTypes.GetSolutionOverview => await _documentService.GetSolutionOverviewAsync(request),
