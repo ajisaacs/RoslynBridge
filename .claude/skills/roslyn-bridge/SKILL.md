@@ -5,6 +5,25 @@ description: Specialized interface for C# and .NET projects. **AUTOMATICALLY ACT
 
 # Roslyn Bridge - C# Code Analysis
 
+# ⚠️ CRITICAL: SHELL SYNTAX WARNING ⚠️
+
+**YOU ARE USING THE BASH TOOL ON WINDOWS (GIT BASH), NOT POWERSHELL!**
+
+## MANDATORY SYNTAX RULES:
+```bash
+# ✅ CORRECT - ALWAYS USE THIS
+"$USERPROFILE/.claude/skills/roslyn-bridge/scripts/rb" instances
+
+# ❌ WRONG - NEVER USE THIS
+$env:USERPROFILE/.claude/skills/roslyn-bridge/scripts/rb instances
+```
+
+**WHY:** Git Bash doesn't understand `$env:USERPROFILE` (PowerShell). It will expand `$env` as empty, resulting in `:USERPROFILE/...` and "No such file or directory" errors.
+
+**REMEMBER:** Every time you use the Bash tool in this skill, use `$USERPROFILE` (bash syntax), NOT `$env:USERPROFILE` (PowerShell syntax).
+
+---
+
 ## AUTO-ACTIVATION TRIGGERS
 
 **This skill should be AUTOMATICALLY ACTIVATED when:**
@@ -44,6 +63,23 @@ When detailed API specifications or curl fallback examples are needed, load thes
 3. **ALWAYS CHECK INSTANCES FIRST** - Verify VS is running and get solution name
 4. **NEVER GUESS** - Always query the API for actual information
 
+## ⚠️ SHELL SYNTAX - CRITICAL
+**The Bash tool uses Git Bash on Windows, NOT PowerShell. You MUST use bash syntax:**
+
+```bash
+# ✅ CORRECT - Bash syntax (use this)
+"$USERPROFILE/.claude/skills/roslyn-bridge/scripts/rb" summary
+
+# ❌ WRONG - PowerShell syntax (never use this in Bash tool)
+$env:USERPROFILE/.claude/skills/roslyn-bridge/scripts/rb summary
+```
+
+**Why this matters:**
+- Git Bash doesn't understand `$env:USERPROFILE` (PowerShell syntax)
+- When bash sees `$env:USERPROFILE`, it expands `$env` as empty, resulting in `:USERPROFILE/...`
+- This causes "No such file or directory" errors
+- **ALWAYS use `$USERPROFILE` (bash syntax) in all rb commands**
+
 ## 🎯 FINDING SYMBOLS: WHICH COMMAND TO USE?
 
 **PRIMARY: Use `symbol --name` for finding types, classes, interfaces, methods, properties:**
@@ -82,6 +118,8 @@ When detailed API specifications or curl fallback examples are needed, load thes
 
 ## Quick Start - Use rb Helper Script
 
+**⚠️ REMINDER: Use `$USERPROFILE` (bash syntax), NOT `$env:USERPROFILE` (PowerShell syntax)!**
+
 **The rb bash script is available in two locations:**
 - Project scripts directory: `./scripts/rb`
 - Skill scripts directory: `"$USERPROFILE/.claude/skills/roslyn-bridge/scripts/rb"`
@@ -89,7 +127,7 @@ When detailed API specifications or curl fallback examples are needed, load thes
 Both auto-detect the solution from the current directory.
 
 ```bash
-# Step 1: Check what VS instances are running
+# Step 1: Check what VS instances are running (USE $USERPROFILE NOT $env:USERPROFILE)
 "$USERPROFILE/.claude/skills/roslyn-bridge/scripts/rb" instances
 
 # Step 2: Use rb commands (auto-detects solution from current directory)
@@ -288,6 +326,7 @@ curl http://localhost:5001/api/health
 ## DO
 
 - ✅ Always use rb script first for all queries: `"$USERPROFILE/.claude/skills/roslyn-bridge/scripts/rb"`
+- ✅ **ALWAYS use bash syntax `$USERPROFILE`** in Bash tool commands (NOT PowerShell syntax `$env:USERPROFILE`)
 - ✅ **Use `symbol --name ClassName`** to find classes, interfaces, methods, properties (most reliable)
 - ✅ Use `searchcode` only for regex pattern matching, NOT simple name lookups
 - ✅ Always check instances first with rb instances command
@@ -298,6 +337,7 @@ curl http://localhost:5001/api/health
 
 ## DO NOT
 
+- ❌ **NEVER use PowerShell syntax `$env:USERPROFILE` in Bash tool** - use `$USERPROFILE` instead
 - ❌ Try to analyze C# code manually
 - ❌ Guess about errors, warnings, or file locations
 - ❌ Use relative file paths
