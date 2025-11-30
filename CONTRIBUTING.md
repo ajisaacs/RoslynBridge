@@ -72,12 +72,11 @@ The API will be available at `http://localhost:5001`
 Use the helper script to build and install the VSIX:
 
 ```powershell
-scripts\reinstall-vsix.ps1 -Configuration Debug
+scripts\install-vsix.ps1 -Configuration Debug
 
 # Options:
 # -SkipBuild     Skip the build step and use existing VSIX
 # -NoUninstall   Install without uninstalling first
-# -VerboseOutput Show detailed installer output
 ```
 
 Or manually:
@@ -88,24 +87,12 @@ Or manually:
 
 ### Running Tests
 
-Run all tests:
-```bash
-dotnet test
-```
+> **Note:** A formal test suite is not yet implemented. Contributions are welcome!
 
-Run specific test project:
+When tests are added:
 ```bash
-dotnet test RoslynBridge.Tests\RoslynBridge.Tests.csproj
-```
-
-Run tests with coverage:
-```bash
-dotnet test --collect:"XPlat Code Coverage"
-```
-
-Run tests with verbose output:
-```bash
-dotnet test --verbosity detailed
+dotnet test                           # Run all tests
+dotnet test --verbosity detailed      # Run with verbose output
 ```
 
 ## Development Workflow
@@ -126,7 +113,7 @@ For rapid testing of extension changes:
 
 ```powershell
 # Build, install, and restart VS in one command
-scripts\reinstall-vsix.ps1 -Configuration Debug
+scripts\install-vsix.ps1 -Configuration Debug
 ```
 
 ### Debugging the Extension
@@ -175,13 +162,9 @@ RoslynBridge/
 │   ├── Services/              # Instance registry, routing
 │   └── Program.cs             # Service configuration
 │
-├── RoslynBridge.Tests/        # Unit tests
-│   ├── ServerTests/           # Extension tests
-│   └── WebApiTests/           # WebAPI tests
-│
 ├── scripts/                   # Build and install scripts
-│   ├── reinstall-vsix.ps1     # Quick VSIX reinstall
-│   ├── webapi-install.ps1     # Service installer
+│   ├── install-vsix.ps1       # VSIX installer
+│   ├── install-webapi.ps1     # Service installer
 │   └── sync-skill.ps1         # Sync Claude skill
 │
 └── .claude/                   # Claude Code integration
@@ -268,9 +251,9 @@ Use conventional commit format when possible:
    git rebase main
    ```
 
-2. **Run all tests** and ensure they pass
+2. **Build and verify** the solution compiles
    ```bash
-   dotnet test
+   dotnet build
    ```
 
 3. **Update documentation** if needed
@@ -295,9 +278,8 @@ Use conventional commit format when possible:
 
 1. **Add controller method** in `RoslynBridge.WebApi/Controllers/RoslynController.cs`
 2. **Implement service logic** in `RoslynBridge/Services/`
-3. **Add tests** in `RoslynBridge.Tests/`
-4. **Update documentation** in README or ARCHITECTURE
-5. **Test end-to-end** with actual VS instance
+3. **Update documentation** in README or ARCHITECTURE
+4. **Test end-to-end** with actual VS instance
 
 ### Modifying Extension Behavior
 
@@ -326,8 +308,8 @@ Use conventional commit format when possible:
 3. **Create git tag** with version number
 4. **Build release artifacts**
    ```bash
-   scripts\reinstall-vsix.ps1 -Configuration Release -SkipInstall
-   scripts\webapi-install.ps1 -Configuration Release
+   scripts\install-vsix.ps1 -Configuration Release -SkipInstall
+   scripts\install-webapi.ps1 -Configuration Release
    ```
 5. **Create GitHub release** with artifacts
 6. **Update documentation** if needed
