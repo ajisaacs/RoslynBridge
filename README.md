@@ -46,7 +46,7 @@ When you ask an AI to help with C# code, it typically only sees your code as tex
 
 3. **Install the WebAPI service** (requires Administrator)
    ```powershell
-   scripts\webapi-install.ps1 -Configuration Release
+   scripts\install-webapi.ps1 -Configuration Release
    ```
 
 4. **Verify it's working**
@@ -121,7 +121,7 @@ Connection refused to `localhost:5001`
 ```powershell
 Get-Service RoslynBridgeWebApi    # Check status
 Start-Service RoslynBridgeWebApi  # Start if stopped
-scripts\webapi-install.ps1        # Reinstall if missing
+scripts\install-webapi.ps1        # Reinstall if missing
 ```
 
 ### Wrong Solution Queried
@@ -145,7 +145,7 @@ Get-Service RoslynBridgeWebApi      # Check status
 ## Reinstalling the VS Extension
 
 ```powershell
-scripts\reinstall-vsix.ps1 -Configuration Release
+scripts\install-vsix.ps1 -Configuration Release
 
 # Options:
 # -SkipBuild     Reuse existing VSIX
@@ -154,7 +154,7 @@ scripts\reinstall-vsix.ps1 -Configuration Release
 
 ## Additional Documentation
 
-- [Architecture Details](ARCHITECTURE.md) - Technical design, flows, and diagrams
+- [Architecture Details](docs/ARCHITECTURE.md) - Technical design, flows, and diagrams
 - [Contributing Guide](CONTRIBUTING.md) - Development setup and guidelines
 
 ## License

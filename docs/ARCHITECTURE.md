@@ -27,9 +27,9 @@ This document provides detailed technical information about RoslynBridge's archi
 │  VS Instance 1  │       │  VS Instance 2  │
 │ (Port 59123)    │       │ (Port 59124)    │
 │                 │       │                 │
-│ RoslynBridge    │       │ CutFab          │
+│ Solution A      │       │ Solution B      │
+│ RoslynBridge    │       │ RoslynBridge    │
 │ Extension       │       │ Extension       │
-│ (VSIX)          │       │ (VSIX)          │
 └─────────────────┘       └─────────────────┘
 ```
 
