@@ -1061,4 +1061,26 @@ public class RoslynController : ControllerBase
         var result = await _bridgeClient.ExecuteQueryAsync(request, instancePort, null, cancellationToken);
         return Ok(result);
     }
+
+    /// <summary>
+    /// Refresh the workspace by reloading all open documents from disk.
+    /// Use this after externally modifying files (e.g., via Claude Code) to ensure
+    /// VS has the latest content for diagnostics and code analysis.
+    /// </summary>
+    [HttpPost("workspace/refresh")]
+    [ProducesResponseType(typeof(RoslynQueryResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<RoslynQueryResponse>> RefreshWorkspace(
+        [FromQuery] string? solutionName = null,
+        [FromQuery] string? filePath = null,
+        [FromQuery] int? instancePort = null,
+        CancellationToken cancellationToken = default)
+    {
+        var request = new RoslynQueryRequest
+        {
+            QueryType = "refreshworkspace",
+            FilePath = filePath
+        };
+        var result = await _bridgeClient.ExecuteQueryAsync(request, instancePort, solutionName, cancellationToken);
+        return Ok(result);
+    }
 }
