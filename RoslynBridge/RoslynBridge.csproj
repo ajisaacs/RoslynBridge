@@ -78,6 +78,7 @@
     <Compile Include="Services\RoslynQueryService.cs" />
     <Compile Include="Services\SymbolQueryService.cs" />
     <Compile Include="Services\WorkspaceProvider.cs" />
+    <Compile Include="Services\WorkspaceService.cs" />
     <None Include="source.extension.vsixmanifest">
       <SubType>Designer</SubType>
     </None>

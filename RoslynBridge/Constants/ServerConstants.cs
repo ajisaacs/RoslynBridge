@@ -53,5 +53,8 @@ namespace RoslynBridge.Constants
         public const string GetCodeSmells = "getcodesmells";
         public const string GetCodeSmellSummary = "getcodesmellsummary";
         public const string GetDuplicates = "getduplicates";
+
+        // Workspace operations
+        public const string RefreshWorkspace = "refreshworkspace";
     }
 }

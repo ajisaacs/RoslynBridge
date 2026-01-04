@@ -20,6 +20,7 @@ namespace RoslynBridge.Services
         private readonly RefactoringService _refactoringService;
         private readonly ProjectOperationsService _projectOperationsService;
         private readonly CodeSmellAnalysisService _codeSmellService;
+        private readonly WorkspaceService _workspaceService;
 
         public RoslynQueryService(AsyncPackage package)
         {
@@ -33,6 +34,7 @@ namespace RoslynBridge.Services
             _refactoringService = new RefactoringService(package, _workspaceProvider);
             _projectOperationsService = new ProjectOperationsService(_workspaceProvider);
             _codeSmellService = new CodeSmellAnalysisService(package, _workspaceProvider);
+            _workspaceService = new WorkspaceService(package);
         }
 
         public async Task InitializeAsync()
@@ -113,6 +115,9 @@ namespace RoslynBridge.Services
                     QueryTypes.GetCodeSmells => await _codeSmellService.GetCodeSmellsAsync(request),
                     QueryTypes.GetCodeSmellSummary => await _codeSmellService.GetCodeSmellSummaryAsync(request),
                     QueryTypes.GetDuplicates => await _codeSmellService.GetDuplicatesAsync(request),
+
+                    // Workspace operations
+                    QueryTypes.RefreshWorkspace => await _workspaceService.RefreshWorkspaceAsync(request),
 
                     _ => new QueryResponse
                     {
