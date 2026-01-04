@@ -72,6 +72,7 @@ Usage:
   ./scripts/rb clean --project Name [-s YourSolution]
   ./scripts/rb restore --project Name [-s YourSolution]
   ./scripts/rb mkdir --dir path [-s YourSolution]
+  ./scripts/rb refresh [--file path] [-s YourSolution]
   ./scripts/rb typemembers --name Full.Type.Name [--inherited] [-s YourSolution]
   ./scripts/rb typehierarchy --name Full.Type.Name [--direction up|down|both] [-s YourSolution]
   ./scripts/rb implementations [--name Full.Type.Name | --file path --line N --column M] [-s YourSolution]
@@ -115,6 +116,10 @@ Examples:
   ./scripts/rb build --project MyApp
   ./scripts/rb query --query-type getdiagnostics --fields '{"severity":"error"}'
   ./scripts/rb addpkg --project App --package Newtonsoft.Json --version 13.0.3
+
+  # Workspace Refresh (after external file edits):
+  ./scripts/rb refresh                                    # Reload all open documents from disk
+  ./scripts/rb refresh --file ./MyApp/Program.cs          # Reload specific file
 
   # Code Smell Examples:
   ./scripts/rb codesmells                                # All smells, default thresholds
@@ -648,6 +653,13 @@ EOF
 EOF
 )
         invoke_roslyn_bridge "/api/roslyn/query" "POST" params "$body"
+        ;;
+    refresh)
+        # Refresh workspace - reload all open documents from disk
+        # Useful after external file modifications (e.g., by Claude Code)
+        declare -A params=([solutionName]="$SOLUTION_NAME")
+        [[ -n "$FILE_PATH" ]] && params[filePath]=$(normalize_path "$(get_full_path "$FILE_PATH")")
+        invoke_roslyn_bridge "/api/roslyn/workspace/refresh" "POST" params
         ;;
     typemembers)
         if [[ -z "$SYMBOL_NAME" ]]; then
