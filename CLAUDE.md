@@ -1,71 +1,80 @@
 # Claude Code Development Notes
 
-## Working with the Roslyn Bridge Skill
+## RoslynBridge MCP Server
 
-### Important: Skill File Modifications
+This project includes an MCP (Model Context Protocol) server that exposes Roslyn code analysis tools to Claude. The MCP server replaces the previous skill-based approach.
 
-**ALWAYS modify the skill files in the `.claude` project-level directory, NOT in the user-level skill directory.**
+### MCP Configuration
 
-The canonical source of truth for the Roslyn Bridge skill is located at:
-```
-.claude/skills/roslyn-bridge/
-├── SKILL.md          # Main skill documentation (MODIFY THIS)
-├── scripts/
-│   └── rb            # Shell helper script (MODIFY THIS)
-```
+The MCP server is configured in `.mcp.json` at the project root:
 
-After making changes to these files, use the sync script to update:
-- Your personal project-level skill at `~/.claude/skills/roslyn-bridge/`
-- The project-level scripts directory at `scripts/rb`
-
-### Skill Synchronization
-
-To sync changes from the project's `.claude/skills/roslyn-bridge/` to user-level and project scripts:
-
-```powershell
-# Run the sync script (with interactive prompts and diff viewing)
-.\scripts\sync-skill.ps1
-
-# Or run with -Force to overwrite without prompting
-.\scripts\sync-skill.ps1 -Force
-
-# Or run with -DryRun to preview changes without modifying files
-.\scripts\sync-skill.ps1 -DryRun
+```json
+{
+  "mcpServers": {
+    "roslyn-bridge": {
+      "command": "dotnet",
+      "args": ["run", "--project", "./RoslynBridge.Mcp/RoslynBridge.Mcp.csproj", "--no-build"]
+    }
+  }
+}
 ```
 
-This will:
-1. Compare and sync `.claude/skills/roslyn-bridge/` → `~/.claude/skills/roslyn-bridge/`
-2. Compare and sync `.claude/skills/roslyn-bridge/scripts/rb` → `scripts/rb`
-3. Show diffs and prompt for confirmation (unless -Force is used)
-4. Create destination directories if they don't exist
+### Available MCP Tools (30 total)
 
-### Why This Workflow?
+**Diagnostics (3):**
+- `get_diagnostics` - Get compiler errors and warnings
+- `get_diagnostics_summary` - Get counts by severity
+- `get_diagnostics_count` - Get total diagnostic count
 
-1. **Version Control**: The `.claude` folder is committed to git, allowing team members to get the latest skill automatically
-2. **Single Source of Truth**: Prevents confusion about which files to modify
-3. **User-Level Sync**: Developers can use the skill from any project after syncing to `~/.claude/skills/`
-4. **Project Scripts**: The sync also ensures `scripts/rb` matches the skill version
+**Symbols (11):**
+- `get_symbol` - Get symbol info at a position
+- `find_references` - Find all references to a symbol
+- `get_references_count` - Count references
+- `search_symbol` - Search symbols by name
+- `get_type_members` - Get members of a type
+- `get_type_hierarchy` - Get inheritance hierarchy
+- `find_implementations` - Find interface implementations
+- `get_call_hierarchy` - Get callers/callees
+- `search_code` - Regex pattern search
+- `get_symbol_context` - Get symbol context info
+- `get_namespace_types` - Get types in a namespace
 
-### Claude Code Skills Documentation
+**Projects (8):**
+- `get_projects` - List all projects
+- `get_files` - Get files with filtering
+- `get_solution_overview` - Get solution statistics
+- `build_project` - Build a project
+- `clean_project` - Clean build outputs
+- `restore_packages` - Restore NuGet packages
+- `add_package` - Add a NuGet package
+- `remove_package` - Remove a NuGet package
 
-Skills in `.claude/skills/` sync automatically via git. When team members pull the latest changes, they automatically get updated skills.
+**Code Quality (3):**
+- `get_code_smells` - Detect code smells
+- `get_code_smell_summary` - Summary by smell type
+- `get_duplicates` - Find duplicate code
 
-For personal use across all projects, run the sync script to copy to `~/.claude/skills/roslyn-bridge/`.
+**Instances (3):**
+- `list_instances` - List VS instances
+- `get_instance_by_solution` - Find instance by solution
+- `check_health` - Health check
 
-## Skill Structure
+**Workspace (2):**
+- `refresh_workspace` - Reload files from disk
+- `format_document` - Format a file
 
+### Prerequisites
+
+1. **Visual Studio** with RoslynBridge extension installed
+2. **RoslynBridge.WebApi** running on port 5001
+3. **Solution open** in Visual Studio
+
+### Building the MCP Server
+
+```bash
+dotnet build RoslynBridge.Mcp -c Release
 ```
-.claude/skills/roslyn-bridge/
-├── SKILL.md          # Main skill prompt and documentation
-└── scripts/
-    └── rb            # Shell script wrapper for WebAPI
-```
 
-The `SKILL.md` file contains:
-- Skill metadata (name, description)
-- Usage instructions for Claude
-- API endpoint documentation
-- Workflow patterns and examples
-- Troubleshooting guidance
+### Configuration
 
-The `scripts/rb` helper provides a convenient shell script interface to the Roslyn Bridge WebAPI.
+The MCP server connects to the WebAPI at `http://localhost:5001` by default. This can be changed in `RoslynBridge.Mcp/appsettings.json`.
