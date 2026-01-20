@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "roslyn-bridge": {
+      "command": "dotnet",
+      "args": [
+        "run",
+        "--project",
+        "./RoslynBridge.Mcp/RoslynBridge.Mcp.csproj",
+        "--no-build"
+      ]
+    }
+  }
+}
