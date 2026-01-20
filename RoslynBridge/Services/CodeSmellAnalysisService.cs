@@ -4,11 +4,10 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using Microsoft.IO;
 using Microsoft.VisualStudio.Shell;
 using RoslynBridge.Models;
+using RoslynBridge.Services.Analysis;
 
 namespace RoslynBridge.Services
 {
@@ -17,6 +16,8 @@ namespace RoslynBridge.Services
     /// </summary>
     public class CodeSmellAnalysisService : BaseRoslynService
     {
+        private readonly DuplicateCodeAnalyzer _duplicateAnalyzer = new();
+
         public CodeSmellAnalysisService(AsyncPackage package, IWorkspaceProvider workspaceProvider)
             : base(package, workspaceProvider)
         {
@@ -58,7 +59,7 @@ namespace RoslynBridge.Services
 
                     foreach (var document in project.Documents)
                     {
-                        if (IsGeneratedFile(document.FilePath))
+                        if (SyntaxMetrics.IsGeneratedFile(document.FilePath))
                             continue;
 
                         var fileSmells = await AnalyzeDocumentAsync(document, thresholds, project.Name);
@@ -120,6 +121,35 @@ namespace RoslynBridge.Services
             return CreateSuccessResponse(summary);
         }
 
+        /// <summary>
+        /// Detect duplicate code blocks across the solution
+        /// </summary>
+        public async Task<QueryResponse> GetDuplicatesAsync(QueryRequest request)
+        {
+            var minLines = 5; // Default minimum lines
+            var minSimilarity = 80; // Default 80% similarity
+            string? classNameFilter = null;
+            string? namespaceFilter = null;
+
+            if (request.Parameters != null)
+            {
+                if (request.Parameters.TryGetValue("minLines", out var minLinesStr) && int.TryParse(minLinesStr, out var ml))
+                    minLines = ml;
+                if (request.Parameters.TryGetValue("similarity", out var simStr) && int.TryParse(simStr, out var sim))
+                    minSimilarity = sim;
+                if (request.Parameters.TryGetValue("className", out var cn))
+                    classNameFilter = cn;
+                if (request.Parameters.TryGetValue("namespace", out var ns))
+                    namespaceFilter = ns;
+            }
+
+            var projects = Workspace?.CurrentSolution.Projects ?? Enumerable.Empty<Project>();
+            var duplicates = await _duplicateAnalyzer.FindDuplicatesAsync(
+                projects, minLines, minSimilarity, classNameFilter, namespaceFilter);
+
+            return CreateSuccessResponse(duplicates, $"Found {duplicates.Count} duplicate(s)");
+        }
+
         private async Task<List<CodeSmellInfo>> AnalyzeDocumentAsync(Document document, CodeSmellThresholds thresholds, string? projectName = null)
         {
             var smells = new List<CodeSmellInfo>();
@@ -150,15 +180,15 @@ namespace RoslynBridge.Services
         private List<CodeSmellInfo> AnalyzeMethod(MethodDeclarationSyntax method, SemanticModel semanticModel, CodeSmellThresholds thresholds, string? projectName = null)
         {
             var smells = new List<CodeSmellInfo>();
-            var methodSymbol = semanticModel.GetDeclaredSymbol(method);
+            var methodSymbol = semanticModel.GetDeclaredSymbol(method) as IMethodSymbol;
 
             if (methodSymbol == null)
                 return smells;
 
-            var location = CreateLocationInfo(method.GetLocation());
+            var location = SyntaxMetrics.CreateLocationInfo(method.GetLocation());
 
             // Check method length
-            var lineCount = GetMethodLineCount(method);
+            var lineCount = SyntaxMetrics.GetMethodLineCount(method);
             if (lineCount > thresholds.MethodLength)
             {
                 var (severity, priorityScore) = CalculateSeverityAndPriority(lineCount, thresholds.MethodLength, 1.5);
@@ -179,7 +209,7 @@ namespace RoslynBridge.Services
             }
 
             // Check cyclomatic complexity
-            var complexity = CalculateComplexity(method);
+            var complexity = ComplexityCalculator.Calculate(method);
             if (complexity > thresholds.CyclomaticComplexity)
             {
                 var (severity, priorityScore) = CalculateSeverityAndPriority(complexity, thresholds.CyclomaticComplexity, 2.0);
@@ -221,7 +251,7 @@ namespace RoslynBridge.Services
             }
 
             // Check nesting depth
-            var nestingDepth = CalculateNestingDepth(method);
+            var nestingDepth = NestingDepthCalculator.Calculate(method);
             if (nestingDepth > thresholds.NestingDepth)
             {
                 var (severity, priorityScore) = CalculateSeverityAndPriority(nestingDepth, thresholds.NestingDepth, 1.3);
@@ -247,12 +277,12 @@ namespace RoslynBridge.Services
         private List<CodeSmellInfo> AnalyzeClass(ClassDeclarationSyntax classDecl, SemanticModel semanticModel, CodeSmellThresholds thresholds, string? projectName = null)
         {
             var smells = new List<CodeSmellInfo>();
-            var classSymbol = semanticModel.GetDeclaredSymbol(classDecl);
+            var classSymbol = semanticModel.GetDeclaredSymbol(classDecl) as INamedTypeSymbol;
 
             if (classSymbol == null)
                 return smells;
 
-            var location = CreateLocationInfo(classDecl.GetLocation());
+            var location = SyntaxMetrics.CreateLocationInfo(classDecl.GetLocation());
 
             // Check member count
             var memberCount = classSymbol.GetMembers().Count(m =>
@@ -281,7 +311,7 @@ namespace RoslynBridge.Services
             }
 
             // Check class length
-            var classLineCount = GetClassLineCount(classDecl);
+            var classLineCount = SyntaxMetrics.GetClassLineCount(classDecl);
             if (classLineCount > thresholds.ClassLength)
             {
                 var (severity, priorityScore) = CalculateSeverityAndPriority(classLineCount, thresholds.ClassLength, 1.3);
@@ -307,16 +337,11 @@ namespace RoslynBridge.Services
         /// <summary>
         /// Calculate severity level and priority score based on how far over threshold
         /// </summary>
-        /// <param name="actualValue">Actual measured value</param>
-        /// <param name="threshold">Configured threshold</param>
-        /// <param name="weight">Weight factor for this metric (higher = more important)</param>
-        /// <returns>Tuple of (severity, priorityScore)</returns>
-        private (string severity, int priorityScore) CalculateSeverityAndPriority(int actualValue, int threshold, double weight = 1.0)
+        private static (string severity, int priorityScore) CalculateSeverityAndPriority(int actualValue, int threshold, double weight = 1.0)
         {
             var ratio = (double)actualValue / threshold;
 
             // Calculate base score (0-100)
-            // Formula: min(100, (ratio - 1) * 100 * weight)
             var baseScore = Math.Min(100, (ratio - 1.0) * 100 * weight);
             var priorityScore = (int)Math.Round(baseScore);
 
@@ -334,57 +359,7 @@ namespace RoslynBridge.Services
             return (severity, priorityScore);
         }
 
-        private int GetMethodLineCount(MethodDeclarationSyntax method)
-        {
-            if (method.Body == null && method.ExpressionBody == null)
-                return 0;
-
-            var span = method.Body?.Span ?? method.ExpressionBody!.Span;
-            var text = method.SyntaxTree.GetText();
-            var startLine = text.Lines.GetLineFromPosition(span.Start).LineNumber;
-            var endLine = text.Lines.GetLineFromPosition(span.End).LineNumber;
-
-            return endLine - startLine + 1;
-        }
-
-        private int GetClassLineCount(ClassDeclarationSyntax classDecl)
-        {
-            var span = classDecl.Span;
-            var text = classDecl.SyntaxTree.GetText();
-            var startLine = text.Lines.GetLineFromPosition(span.Start).LineNumber;
-            var endLine = text.Lines.GetLineFromPosition(span.End).LineNumber;
-
-            return endLine - startLine + 1;
-        }
-
-        private int CalculateComplexity(MethodDeclarationSyntax method)
-        {
-            var calculator = new ComplexityCalculator();
-            calculator.Visit(method);
-            return calculator.Complexity;
-        }
-
-        private int CalculateNestingDepth(MethodDeclarationSyntax method)
-        {
-            var calculator = new NestingDepthCalculator();
-            calculator.Visit(method);
-            return calculator.MaxDepth;
-        }
-
-        private LocationInfo CreateLocationInfo(Location location)
-        {
-            var lineSpan = location.GetLineSpan();
-            return new LocationInfo
-            {
-                FilePath = lineSpan.Path,
-                StartLine = lineSpan.StartLinePosition.Line + 1,
-                StartColumn = lineSpan.StartLinePosition.Character,
-                EndLine = lineSpan.EndLinePosition.Line + 1,
-                EndColumn = lineSpan.EndLinePosition.Character
-            };
-        }
-
-        private CodeSmellThresholds ParseThresholds(Dictionary<string, string>? parameters)
+        private static CodeSmellThresholds ParseThresholds(Dictionary<string, string>? parameters)
         {
             var thresholds = new CodeSmellThresholds();
 
@@ -410,404 +385,6 @@ namespace RoslynBridge.Services
                 thresholds.ClassLength = cl;
 
             return thresholds;
-        }
-
-        private static bool IsGeneratedFile(string? filePath)
-        {
-            if (string.IsNullOrEmpty(filePath)) return false;
-
-            try
-            {
-                var p = filePath.Replace('/', '\\').ToLowerInvariant();
-                if (p.Contains("\\obj\\") || p.Contains("\\bin\\")) return true;
-                if (p.EndsWith(".g.cs") || p.EndsWith(".g.i.cs") || p.EndsWith(".generated.cs") || p.EndsWith(".designer.cs")) return true;
-                if (p.EndsWith("\\globalusings.g.cs")) return true;
-                return false;
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        /// <summary>
-        /// Calculates cyclomatic complexity of a method
-        /// </summary>
-        private class ComplexityCalculator : CSharpSyntaxWalker
-        {
-            public int Complexity { get; private set; } = 1; // Base complexity
-
-            public override void VisitIfStatement(IfStatementSyntax node)
-            {
-                Complexity++;
-                base.VisitIfStatement(node);
-            }
-
-            public override void VisitWhileStatement(WhileStatementSyntax node)
-            {
-                Complexity++;
-                base.VisitWhileStatement(node);
-            }
-
-            public override void VisitForStatement(ForStatementSyntax node)
-            {
-                Complexity++;
-                base.VisitForStatement(node);
-            }
-
-            public override void VisitForEachStatement(ForEachStatementSyntax node)
-            {
-                Complexity++;
-                base.VisitForEachStatement(node);
-            }
-
-            public override void VisitSwitchSection(SwitchSectionSyntax node)
-            {
-                // Each case adds to complexity
-                Complexity++;
-                base.VisitSwitchSection(node);
-            }
-
-            public override void VisitCatchClause(CatchClauseSyntax node)
-            {
-                Complexity++;
-                base.VisitCatchClause(node);
-            }
-
-            public override void VisitConditionalExpression(ConditionalExpressionSyntax node)
-            {
-                Complexity++;
-                base.VisitConditionalExpression(node);
-            }
-
-            public override void VisitBinaryExpression(BinaryExpressionSyntax node)
-            {
-                // Logical AND/OR add to complexity
-                if (node.Kind() == SyntaxKind.LogicalAndExpression ||
-                    node.Kind() == SyntaxKind.LogicalOrExpression ||
-                    node.Kind() == SyntaxKind.CoalesceExpression)
-                {
-                    Complexity++;
-                }
-                base.VisitBinaryExpression(node);
-            }
-        }
-
-        /// <summary>
-        /// Calculates maximum nesting depth in a method
-        /// </summary>
-        private class NestingDepthCalculator : CSharpSyntaxWalker
-        {
-            private int _currentDepth = 0;
-            public int MaxDepth { get; private set; } = 0;
-
-            public override void VisitIfStatement(IfStatementSyntax node)
-            {
-                VisitNested(() => base.VisitIfStatement(node));
-            }
-
-            public override void VisitWhileStatement(WhileStatementSyntax node)
-            {
-                VisitNested(() => base.VisitWhileStatement(node));
-            }
-
-            public override void VisitForStatement(ForStatementSyntax node)
-            {
-                VisitNested(() => base.VisitForStatement(node));
-            }
-
-            public override void VisitForEachStatement(ForEachStatementSyntax node)
-            {
-                VisitNested(() => base.VisitForEachStatement(node));
-            }
-
-            public override void VisitSwitchStatement(SwitchStatementSyntax node)
-            {
-                VisitNested(() => base.VisitSwitchStatement(node));
-            }
-
-            public override void VisitTryStatement(TryStatementSyntax node)
-            {
-                VisitNested(() => base.VisitTryStatement(node));
-            }
-
-            private void VisitNested(Action visitAction)
-            {
-                _currentDepth++;
-                if (_currentDepth > MaxDepth)
-                    MaxDepth = _currentDepth;
-
-                visitAction();
-
-                _currentDepth--;
-            }
-        }
-
-        /// <summary>
-        /// Detect duplicate code blocks across the solution
-        /// </summary>
-        public async Task<QueryResponse> GetDuplicatesAsync(QueryRequest request)
-        {
-            var minLines = 5; // Default minimum lines
-            var minSimilarity = 80; // Default 80% similarity
-            string? classNameFilter = null;
-            string? namespaceFilter = null;
-
-            if (request.Parameters != null)
-            {
-                if (request.Parameters.TryGetValue("minLines", out var minLinesStr) && int.TryParse(minLinesStr, out var ml))
-                    minLines = ml;
-                if (request.Parameters.TryGetValue("similarity", out var simStr) && int.TryParse(simStr, out var sim))
-                    minSimilarity = sim;
-                if (request.Parameters.TryGetValue("className", out var cn))
-                    classNameFilter = cn;
-                if (request.Parameters.TryGetValue("namespace", out var ns))
-                    namespaceFilter = ns;
-            }
-
-            var duplicates = new List<DuplicateCodeInfo>();
-            var methodInfos = new List<(string projectName, IMethodSymbol symbol, MethodDeclarationSyntax syntax, string[] tokens, int tokenCount)>();
-
-            // Collect all methods from the solution
-            foreach (var project in Workspace?.CurrentSolution.Projects ?? Enumerable.Empty<Project>())
-            {
-                foreach (var document in project.Documents)
-                {
-                    if (IsGeneratedFile(document.FilePath))
-                        continue;
-
-                    var syntaxRoot = await document.GetSyntaxRootAsync();
-                    var semanticModel = await document.GetSemanticModelAsync();
-
-                    if (syntaxRoot == null || semanticModel == null)
-                        continue;
-
-                    var methods = syntaxRoot.DescendantNodes().OfType<MethodDeclarationSyntax>();
-                    foreach (var method in methods)
-                    {
-                        var methodSymbol = semanticModel.GetDeclaredSymbol(method);
-                        if (methodSymbol == null)
-                            continue;
-
-                        // Apply class name filter
-                        if (!string.IsNullOrEmpty(classNameFilter))
-                        {
-                            var containingType = methodSymbol.ContainingType?.Name;
-                            if (containingType == null || containingType.IndexOf(classNameFilter, StringComparison.OrdinalIgnoreCase) < 0)
-                                continue;
-                        }
-
-                        // Apply namespace filter
-                        if (!string.IsNullOrEmpty(namespaceFilter))
-                        {
-                            var containingNamespace = methodSymbol.ContainingNamespace?.ToDisplayString();
-                            if (containingNamespace == null || containingNamespace.IndexOf(namespaceFilter, StringComparison.OrdinalIgnoreCase) < 0)
-                                continue;
-                        }
-
-                        var lineCount = GetMethodLineCount(method);
-                        if (lineCount < minLines)
-                            continue;
-
-                        // Extract tokens for comparison (ignore trivia/whitespace)
-                        var tokens = ExtractMethodTokens(method);
-                        if (tokens.Length == 0)
-                            continue;
-
-                        methodInfos.Add((project.Name, methodSymbol, method, tokens, tokens.Length));
-                    }
-                }
-            }
-
-            // Group methods by similar token counts to reduce comparisons (±30% size difference)
-            var buckets = new Dictionary<int, List<int>>();
-            for (int i = 0; i < methodInfos.Count; i++)
-            {
-                var tokenCount = methodInfos[i].tokenCount;
-                var bucketKey = tokenCount / 10; // Group by 10s
-
-                if (!buckets.ContainsKey(bucketKey))
-                    buckets[bucketKey] = new List<int>();
-                buckets[bucketKey].Add(i);
-            }
-
-            // Compare methods within same bucket and adjacent buckets
-            foreach (var bucket in buckets.Values)
-            {
-                for (int i = 0; i < bucket.Count; i++)
-                {
-                    for (int j = i + 1; j < bucket.Count; j++)
-                    {
-                        var idx1 = bucket[i];
-                        var idx2 = bucket[j];
-
-                        var (proj1, sym1, syntax1, tokens1, count1) = methodInfos[idx1];
-                        var (proj2, sym2, syntax2, tokens2, count2) = methodInfos[idx2];
-
-                        // Skip if methods are too different in size (early filter)
-                        var sizeDiff = Math.Abs(count1 - count2);
-                        var maxSize = Math.Max(count1, count2);
-                        if (maxSize > 0 && (double)sizeDiff / maxSize > 0.3)
-                            continue;
-
-                        // Skip comparing a method to itself
-                        if (sym1.Equals(sym2))
-                            continue;
-
-                        var similarity = CalculateTokenSimilarityFast(tokens1, tokens2, minSimilarity);
-                        if (similarity >= minSimilarity)
-                        {
-                            var lineCount = Math.Min(GetMethodLineCount(syntax1), GetMethodLineCount(syntax2));
-                            duplicates.Add(new DuplicateCodeInfo
-                            {
-                                Original = CreateDuplicateLocation(proj1, sym1, syntax1),
-                                Duplicate = CreateDuplicateLocation(proj2, sym2, syntax2),
-                                SimilarityPercent = similarity,
-                                LineCount = lineCount,
-                                TokenCount = Math.Min(tokens1.Length, tokens2.Length),
-                                Message = $"{similarity}% similar code in {sym1.Name} and {sym2.Name}"
-                            });
-                        }
-                    }
-                }
-            }
-
-            // Sort by similarity descending
-            duplicates = duplicates.OrderByDescending(d => d.SimilarityPercent).ToList();
-
-            return CreateSuccessResponse(duplicates, $"Found {duplicates.Count} duplicate(s)");
-        }
-
-        private string[] ExtractMethodTokens(MethodDeclarationSyntax method)
-        {
-            var body = method.Body ?? (SyntaxNode?)method.ExpressionBody;
-            if (body == null)
-                return Array.Empty<string>();
-
-            // Get all tokens, excluding trivia (whitespace, comments)
-            return body.DescendantTokens()
-                .Where(t => !t.IsKind(SyntaxKind.None))
-                .Select(t => t.Kind().ToString())
-                .ToArray();
-        }
-
-        private int CalculateTokenSimilarity(string[] tokens1, string[] tokens2)
-        {
-            if (tokens1.Length == 0 || tokens2.Length == 0)
-                return 0;
-
-            // Simple token-based similarity using Longest Common Subsequence
-            var lcsLength = LongestCommonSubsequence(tokens1, tokens2);
-            var maxLength = Math.Max(tokens1.Length, tokens2.Length);
-
-            return (int)((double)lcsLength / maxLength * 100);
-        }
-
-        /// <summary>
-        /// Fast similarity calculation with early termination
-        /// Uses space-optimized LCS with two rows instead of full 2D array
-        /// </summary>
-        private int CalculateTokenSimilarityFast(string[] tokens1, string[] tokens2, int minSimilarity)
-        {
-            if (tokens1.Length == 0 || tokens2.Length == 0)
-                return 0;
-
-            // Quick exact match check
-            if (tokens1.Length == tokens2.Length)
-            {
-                bool exactMatch = true;
-                for (int i = 0; i < tokens1.Length; i++)
-                {
-                    if (tokens1[i] != tokens2[i])
-                    {
-                        exactMatch = false;
-                        break;
-                    }
-                }
-                if (exactMatch) return 100;
-            }
-
-            // Use space-optimized LCS (O(min(m,n)) space instead of O(m*n))
-            var lcsLength = LongestCommonSubsequenceOptimized(tokens1, tokens2);
-            var maxLength = Math.Max(tokens1.Length, tokens2.Length);
-
-            return (int)((double)lcsLength / maxLength * 100);
-        }
-
-        private int LongestCommonSubsequence(string[] seq1, string[] seq2)
-        {
-            int m = seq1.Length;
-            int n = seq2.Length;
-            var dp = new int[m + 1, n + 1];
-
-            for (int i = 1; i <= m; i++)
-            {
-                for (int j = 1; j <= n; j++)
-                {
-                    if (seq1[i - 1] == seq2[j - 1])
-                        dp[i, j] = dp[i - 1, j - 1] + 1;
-                    else
-                        dp[i, j] = Math.Max(dp[i - 1, j], dp[i, j - 1]);
-                }
-            }
-
-            return dp[m, n];
-        }
-
-        /// <summary>
-        /// Space-optimized LCS that uses O(min(m,n)) space instead of O(m*n)
-        /// </summary>
-        private int LongestCommonSubsequenceOptimized(string[] seq1, string[] seq2)
-        {
-            // Ensure seq1 is the shorter sequence to minimize space usage
-            if (seq1.Length > seq2.Length)
-            {
-                var temp = seq1;
-                seq1 = seq2;
-                seq2 = temp;
-            }
-
-            int m = seq1.Length;
-            int n = seq2.Length;
-
-            // Use only two rows instead of full 2D array
-            var prev = new int[m + 1];
-            var curr = new int[m + 1];
-
-            for (int j = 1; j <= n; j++)
-            {
-                for (int i = 1; i <= m; i++)
-                {
-                    if (seq1[i - 1] == seq2[j - 1])
-                        curr[i] = prev[i - 1] + 1;
-                    else
-                        curr[i] = Math.Max(curr[i - 1], prev[i]);
-                }
-
-                // Swap rows
-                var temp = prev;
-                prev = curr;
-                curr = temp;
-                Array.Clear(curr, 0, curr.Length);
-            }
-
-            return prev[m];
-        }
-
-        private DuplicateLocation CreateDuplicateLocation(string projectName, IMethodSymbol symbol, MethodDeclarationSyntax syntax)
-        {
-            var location = syntax.GetLocation();
-            var lineSpan = location.GetLineSpan();
-
-            return new DuplicateLocation
-            {
-                ProjectName = projectName,
-                FilePath = lineSpan.Path,
-                SymbolName = symbol.ToDisplayString(),
-                SymbolKind = "Method",
-                StartLine = lineSpan.StartLinePosition.Line + 1,
-                EndLine = lineSpan.EndLinePosition.Line + 1
-            };
         }
     }
 }

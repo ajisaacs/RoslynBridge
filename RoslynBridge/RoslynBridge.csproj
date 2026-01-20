@@ -65,6 +65,10 @@
     <!-- Server -->
     <Compile Include="Server\BridgeServer.cs" />
     <!-- Services -->
+    <Compile Include="Services\Analysis\ComplexityCalculator.cs" />
+    <Compile Include="Services\Analysis\DuplicateCodeAnalyzer.cs" />
+    <Compile Include="Services\Analysis\NestingDepthCalculator.cs" />
+    <Compile Include="Services\Analysis\SyntaxMetrics.cs" />
     <Compile Include="Services\BaseRoslynService.cs" />
     <Compile Include="Services\CodeSmellAnalysisService.cs" />
     <Compile Include="Services\ConfigurationService.cs" />
