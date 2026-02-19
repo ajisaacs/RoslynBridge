@@ -1,5 +1,7 @@
 using System.ComponentModel;
+using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using ModelContextProtocol.Server;
 using RoslynBridge.Mcp.Services;
 
@@ -9,7 +11,7 @@ namespace RoslynBridge.Mcp.Tools;
 /// MCP tools for project and solution operations
 /// </summary>
 [McpServerToolType]
-public class ProjectTools
+public partial class ProjectTools
 {
     private readonly IRoslynWebApiClient _client;
 
@@ -69,7 +71,7 @@ public class ProjectTools
         CancellationToken ct = default)
     {
         var result = await _client.BuildProjectAsync(projectName, configuration, ct);
-        return FormatResult(result);
+        return FormatBuildResultCompact(result);
     }
 
     /// <summary>
@@ -130,6 +132,153 @@ public class ProjectTools
         var result = await _client.RemovePackageAsync(projectName, packageName, solutionName, ct);
         return FormatResult(result);
     }
+
+    private static string FormatBuildResultCompact(JsonDocument doc)
+    {
+        var root = doc.RootElement;
+
+        // Check for error response from the API itself
+        if (root.TryGetProperty("success", out var successProp) && !successProp.GetBoolean())
+        {
+            var error = root.TryGetProperty("error", out var errProp) ? errProp.GetString() : "Unknown error";
+            return $"Build failed: {error}";
+        }
+
+        // Extract build output fields from data
+        if (!root.TryGetProperty("data", out var data))
+            return FormatResult(doc);
+
+        var exitCode = data.TryGetProperty("exitCode", out var ec) ? ec.GetInt32() : -1;
+        var output = data.TryGetProperty("output", out var outProp) ? outProp.GetString() ?? "" : "";
+        var stderr = data.TryGetProperty("error", out var errOutput) ? errOutput.GetString() ?? "" : "";
+        var duration = data.TryGetProperty("duration", out var dur) ? dur.GetDouble() : 0;
+        var buildSucceeded = exitCode == 0;
+
+        var sb = new StringBuilder();
+        sb.AppendLine(buildSucceeded ? "Build SUCCEEDED" : "Build FAILED");
+        sb.AppendLine($"Duration: {duration:F0}ms");
+        sb.AppendLine();
+
+        // Parse MSBuild error/warning lines from output and stderr
+        var combined = output + "\n" + stderr;
+        var diagnosticLines = new List<(string Severity, string Code, string File, int Line, string Message)>();
+
+        foreach (var line in combined.Split('\n'))
+        {
+            var match = MsBuildDiagnosticRegex().Match(line);
+            if (match.Success)
+            {
+                var file = match.Groups["file"].Value;
+                var lineNum = int.TryParse(match.Groups["line"].Value, out var ln) ? ln : 0;
+                var severity = match.Groups["severity"].Value;
+                var code = match.Groups["code"].Value;
+                var message = match.Groups["message"].Value.Trim();
+                diagnosticLines.Add((severity, code, file, lineNum, message));
+            }
+        }
+
+        if (diagnosticLines.Count == 0)
+        {
+            // No parseable diagnostics — show a trimmed version of the output
+            if (buildSucceeded)
+            {
+                sb.AppendLine("No errors or warnings.");
+            }
+            else
+            {
+                // Show last 50 lines of output as fallback
+                var lines = combined.Split('\n')
+                    .Select(l => l.TrimEnd())
+                    .Where(l => !string.IsNullOrWhiteSpace(l))
+                    .ToArray();
+                var start = Math.Max(0, lines.Length - 50);
+                for (var i = start; i < lines.Length; i++)
+                    sb.AppendLine(lines[i]);
+            }
+            return sb.ToString().TrimEnd();
+        }
+
+        // Find common path prefix
+        var allPaths = diagnosticLines.Select(d => d.File).Where(f => !string.IsNullOrEmpty(f)).ToList();
+        var commonPrefix = FindCommonPathPrefix(allPaths);
+
+        // Count by severity
+        var errorCount = diagnosticLines.Count(d => d.Severity.Equals("error", StringComparison.OrdinalIgnoreCase));
+        var warningCount = diagnosticLines.Count(d => d.Severity.Equals("warning", StringComparison.OrdinalIgnoreCase));
+        sb.AppendLine($"{errorCount} error(s), {warningCount} warning(s)");
+        sb.AppendLine();
+
+        // Group by code + message
+        var groups = new Dictionary<string, (string Severity, string Message, List<string> Locations)>();
+        foreach (var (severity, code, file, lineNum, message) in diagnosticLines)
+        {
+            var shortPath = file.Length > commonPrefix.Length
+                ? file[commonPrefix.Length..]
+                : Path.GetFileName(file);
+            var location = lineNum > 0 ? $"{shortPath}:{lineNum}" : shortPath;
+
+            var msgKey = message.Length > 80 ? message[..80] : message;
+            var groupKey = $"{code}|{msgKey}";
+
+            if (!groups.TryGetValue(groupKey, out var group))
+            {
+                group = (severity, message.Length > 200 ? message[..200] + "..." : message, new List<string>());
+                groups[groupKey] = group;
+            }
+            group.Locations.Add(location);
+        }
+
+        // Output errors first, then warnings, sorted by count desc
+        var ordered = groups
+            .OrderBy(g => g.Value.Severity.Equals("error", StringComparison.OrdinalIgnoreCase) ? 0 : 1)
+            .ThenByDescending(g => g.Value.Locations.Count);
+
+        foreach (var (key, group) in ordered)
+        {
+            var code = key.Split('|')[0];
+            var countLabel = group.Locations.Count > 1 ? $" x{group.Locations.Count}" : "";
+            sb.AppendLine($"[{group.Severity}] {code}{countLabel}: {group.Message}");
+
+            var locs = group.Locations.Take(10).ToList();
+            sb.AppendLine($"  {string.Join(", ", locs)}");
+            if (group.Locations.Count > 10)
+                sb.AppendLine($"  ...and {group.Locations.Count - 10} more");
+        }
+
+        return sb.ToString().TrimEnd();
+    }
+
+    private static string FindCommonPathPrefix(List<string> paths)
+    {
+        if (paths.Count == 0) return "";
+
+        var normalized = paths.Select(p => p.Replace('/', '\\')).ToList();
+        var first = normalized[0];
+
+        var prefixLen = first.Length;
+        foreach (var path in normalized.Skip(1))
+        {
+            prefixLen = Math.Min(prefixLen, path.Length);
+            for (var i = 0; i < prefixLen; i++)
+            {
+                if (char.ToLowerInvariant(first[i]) != char.ToLowerInvariant(path[i]))
+                {
+                    prefixLen = i;
+                    break;
+                }
+            }
+        }
+
+        var prefix = first[..prefixLen];
+        var lastSep = prefix.LastIndexOf('\\');
+        return lastSep >= 0 ? prefix[..(lastSep + 1)] : "";
+    }
+
+    // Matches MSBuild diagnostic lines like:
+    // C:\path\file.cs(10,5): error CS0234: The type or namespace...
+    // Also handles paths without column: file.cs(10): error CS0234: ...
+    [GeneratedRegex(@"(?<file>[^\(]+)\((?<line>\d+)(?:,\d+)?\)\s*:\s*(?<severity>error|warning)\s+(?<code>\w+)\s*:\s*(?<message>.+)", RegexOptions.IgnoreCase)]
+    private static partial Regex MsBuildDiagnosticRegex();
 
     private static string FormatResult(JsonDocument doc)
     {
