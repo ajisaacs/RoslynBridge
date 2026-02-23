@@ -11,9 +11,9 @@ public class RoslynBridgeOptions
     public const string SectionName = "McpServer";
 
     /// <summary>
-    /// Base URL for the RoslynBridge WebAPI (e.g., http://localhost:5000)
+    /// Base URL for the RoslynBridge WebAPI (e.g., http://localhost:5001)
     /// </summary>
-    public string WebApiBaseUrl { get; set; } = "http://localhost:5000";
+    public string WebApiBaseUrl { get; set; } = "http://localhost:5001";
 
     /// <summary>
     /// Request timeout in seconds
