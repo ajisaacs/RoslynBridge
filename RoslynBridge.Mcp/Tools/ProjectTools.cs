@@ -30,7 +30,7 @@ public partial class ProjectTools
         CancellationToken ct = default)
     {
         var result = await _client.GetProjectsAsync(solutionName, ct);
-        return FormatResult(result);
+        return FormatProjectsCompact(result);
     }
 
     /// <summary>
@@ -133,6 +133,53 @@ public partial class ProjectTools
         return FormatResult(result);
     }
 
+    private static string FormatProjectsCompact(JsonDocument doc)
+    {
+        var root = doc.RootElement;
+
+        if (root.TryGetProperty("success", out var successProp) && !successProp.GetBoolean())
+        {
+            var error = root.TryGetProperty("error", out var errProp) ? errProp.GetString() : "Unknown error";
+            return $"Error: {error}";
+        }
+
+        JsonElement projects;
+        if (root.TryGetProperty("data", out var dataProp) && dataProp.ValueKind == JsonValueKind.Array)
+            projects = dataProp;
+        else if (root.ValueKind == JsonValueKind.Array)
+            projects = root;
+        else
+            return FormatResult(doc);
+
+        var count = projects.GetArrayLength();
+        if (count == 0)
+            return "No projects found.";
+
+        var sb = new StringBuilder();
+        sb.AppendLine($"{count} project(s)");
+        sb.AppendLine();
+
+        foreach (var proj in projects.EnumerateArray())
+        {
+            var name = proj.TryGetProperty("name", out var n) ? n.GetString() ?? "?" : "?";
+            var filePath = proj.TryGetProperty("filePath", out var fp) ? fp.GetString() ?? "" : "";
+            var docCount = proj.TryGetProperty("documents", out var docs) && docs.ValueKind == JsonValueKind.Array
+                ? docs.GetArrayLength() : 0;
+            var refCount = proj.TryGetProperty("references", out var refs) && refs.ValueKind == JsonValueKind.Array
+                ? refs.GetArrayLength() : 0;
+
+            sb.AppendLine($"{name}");
+            sb.AppendLine($"  Path: {filePath}");
+            sb.AppendLine($"  Documents: {docCount}, References: {refCount}");
+        }
+
+        return sb.ToString().TrimEnd();
+    }
+
+    // Hard limit to stay well under MCP token limits
+    private const int MaxOutputChars = 50_000;
+    private const int MaxDiagnosticGroups = 40;
+
     private static string FormatBuildResultCompact(JsonDocument doc)
     {
         var root = doc.RootElement;
@@ -195,7 +242,7 @@ public partial class ProjectTools
                 for (var i = start; i < lines.Length; i++)
                     sb.AppendLine(lines[i]);
             }
-            return sb.ToString().TrimEnd();
+            return TruncateOutput(sb);
         }
 
         // Find common path prefix
@@ -231,21 +278,40 @@ public partial class ProjectTools
         // Output errors first, then warnings, sorted by count desc
         var ordered = groups
             .OrderBy(g => g.Value.Severity.Equals("error", StringComparison.OrdinalIgnoreCase) ? 0 : 1)
-            .ThenByDescending(g => g.Value.Locations.Count);
+            .ThenByDescending(g => g.Value.Locations.Count)
+            .ToList();
 
+        var shown = 0;
         foreach (var (key, group) in ordered)
         {
+            if (shown >= MaxDiagnosticGroups)
+            {
+                var remaining = ordered.Count - shown;
+                sb.AppendLine($"\n...and {remaining} more diagnostic group(s) omitted (use get_diagnostics for full details)");
+                break;
+            }
+
             var code = key.Split('|')[0];
             var countLabel = group.Locations.Count > 1 ? $" x{group.Locations.Count}" : "";
             sb.AppendLine($"[{group.Severity}] {code}{countLabel}: {group.Message}");
 
-            var locs = group.Locations.Take(10).ToList();
+            var locs = group.Locations.Take(5).ToList();
             sb.AppendLine($"  {string.Join(", ", locs)}");
-            if (group.Locations.Count > 10)
-                sb.AppendLine($"  ...and {group.Locations.Count - 10} more");
+            if (group.Locations.Count > 5)
+                sb.AppendLine($"  ...and {group.Locations.Count - 5} more location(s)");
+
+            shown++;
         }
 
-        return sb.ToString().TrimEnd();
+        return TruncateOutput(sb);
+    }
+
+    private static string TruncateOutput(StringBuilder sb)
+    {
+        var result = sb.ToString().TrimEnd();
+        if (result.Length <= MaxOutputChars)
+            return result;
+        return result[..MaxOutputChars] + "\n\n...[output truncated at 50K chars]";
     }
 
     private static string FindCommonPathPrefix(List<string> paths)
