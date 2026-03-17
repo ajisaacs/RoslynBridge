@@ -571,5 +571,99 @@ namespace RoslynBridge.Services
 
             return CreateSuccessResponse(results);
         }
+
+        public async Task<QueryResponse> FindUsagesAsync(QueryRequest request)
+        {
+            if (string.IsNullOrEmpty(request.SymbolName))
+            {
+                return CreateErrorResponse("SymbolName is required");
+            }
+
+            if (Workspace?.CurrentSolution == null)
+            {
+                return CreateErrorResponse("Workspace not available");
+            }
+
+            var searchName = request.SymbolName!;
+            var allSymbols = new List<ISymbol>();
+
+            foreach (var project in Workspace.CurrentSolution.Projects)
+            {
+                var compilation = await project.GetCompilationAsync();
+                if (compilation == null) continue;
+
+                // Exact match first, then ends-with fallback
+                var symbols = compilation.GetSymbolsWithName(
+                    name => name.Equals(searchName, StringComparison.OrdinalIgnoreCase),
+                    SymbolFilter.All);
+
+                if (!symbols.Any())
+                {
+                    symbols = compilation.GetSymbolsWithName(
+                        name => searchName.EndsWith("." + name, StringComparison.OrdinalIgnoreCase) ||
+                                name.Equals(searchName, StringComparison.OrdinalIgnoreCase),
+                        SymbolFilter.All);
+                }
+
+                foreach (var symbol in symbols)
+                {
+                    if (searchName.Contains("."))
+                    {
+                        var fullName = symbol.ToDisplayString();
+                        if (!fullName.EndsWith(searchName, StringComparison.OrdinalIgnoreCase) &&
+                            !fullName.Equals(searchName, StringComparison.OrdinalIgnoreCase))
+                        {
+                            continue;
+                        }
+                    }
+                    allSymbols.Add(symbol);
+                }
+            }
+
+            if (!allSymbols.Any())
+            {
+                return CreateErrorResponse($"Symbol '{request.SymbolName}' not found");
+            }
+
+            // Deduplicate symbols (same symbol found via multiple project compilations)
+            var uniqueSymbols = allSymbols
+                .GroupBy(s => s.ToDisplayString())
+                .Select(g => g.First())
+                .ToList();
+
+            var filesByProject = new Dictionary<string, HashSet<string>>();
+            var totalReferences = 0;
+
+            foreach (var symbol in uniqueSymbols)
+            {
+                var references = await SymbolFinder.FindReferencesAsync(symbol, Workspace.CurrentSolution);
+                foreach (var refSymbol in references)
+                {
+                    foreach (var location in refSymbol.Locations)
+                    {
+                        totalReferences++;
+                        var doc = location.Document;
+                        var projectName = doc.Project.Name;
+                        var filePath = doc.FilePath ?? doc.Name;
+
+                        if (!filesByProject.ContainsKey(projectName))
+                            filesByProject[projectName] = new HashSet<string>();
+                        filesByProject[projectName].Add(filePath);
+                    }
+                }
+            }
+
+            var result = new UsageInfo
+            {
+                SymbolName = uniqueSymbols.First().ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
+                TotalReferences = totalReferences,
+                FileCount = filesByProject.Values.Sum(s => s.Count),
+                FilesByProject = filesByProject.ToDictionary(
+                    kvp => kvp.Key,
+                    kvp => kvp.Value.OrderBy(f => f).ToList())
+            };
+
+            return CreateSuccessResponse(result);
+        }
     }
 }
