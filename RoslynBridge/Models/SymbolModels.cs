@@ -28,6 +28,7 @@ namespace RoslynBridge.Models
         public bool IsAbstract { get; set; }
         public bool IsVirtual { get; set; }
         public bool IsOverride { get; set; }
+        public string? Value { get; set; }
     }
 
     public class TypeHierarchyInfo
@@ -55,5 +56,23 @@ namespace RoslynBridge.Models
         public string? SymbolAtPosition { get; set; }
         public List<string>? LocalVariables { get; set; }
         public List<string>? Parameters { get; set; }
+    }
+
+    public class SymbolSourceInfo
+    {
+        public string? SymbolName { get; set; }
+        public string? Kind { get; set; }
+        public string? FilePath { get; set; }
+        public int StartLine { get; set; }
+        public int EndLine { get; set; }
+        public string? Source { get; set; }
+    }
+
+    public class UsageInfo
+    {
+        public string? SymbolName { get; set; }
+        public int TotalReferences { get; set; }
+        public int FileCount { get; set; }
+        public Dictionary<string, List<string>>? FilesByProject { get; set; }
     }
 }

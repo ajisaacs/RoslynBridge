@@ -33,6 +33,8 @@ namespace RoslynBridge.Constants
         public const string GetSolutionOverview = "getsolutionoverview";
         public const string GetSymbolContext = "getsymbolcontext";
         public const string SearchCode = "searchcode";
+        public const string GetSymbolSource = "getsymbolsource";
+        public const string FindUsages = "findusages";
 
         // Editing endpoints
         public const string ApplyCodeFix = "applycodefix";
