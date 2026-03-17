@@ -120,6 +120,12 @@ namespace RoslynBridge.Services
             request.Parameters?.TryGetValue("includeInherited", out includeInheritedStr);
             var includeInherited = includeInheritedStr == "true";
 
+            string? kindFilter = null;
+            request.Parameters?.TryGetValue("kind", out kindFilter);
+
+            string? accessibilityFilter = null;
+            request.Parameters?.TryGetValue("accessibility", out accessibilityFilter);
+
             foreach (var project in Workspace?.CurrentSolution.Projects ?? Enumerable.Empty<Project>())
             {
                 var compilation = await project.GetCompilationAsync();
@@ -134,21 +140,46 @@ namespace RoslynBridge.Services
                         ? typeSymbol.GetMembers()
                         : typeSymbol.GetMembers().Where(m => m.ContainingType.Equals(typeSymbol, SymbolEqualityComparer.Default));
 
-                    var memberInfos = members.Select(m => new MemberInfo
+                    // Filter by kind (Method, Property, Field, Event)
+                    if (!string.IsNullOrEmpty(kindFilter))
                     {
-                        Name = m.Name,
-                        Kind = m.Kind.ToString(),
-                        ReturnType = (m as IMethodSymbol)?.ReturnType.ToDisplayString() ??
-                                    (m as IPropertySymbol)?.Type.ToDisplayString() ??
-                                    (m as IFieldSymbol)?.Type.ToDisplayString(),
-                        Signature = m.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
-                        Documentation = m.GetDocumentationCommentXml(),
-                        Modifiers = GetModifiers(m),
-                        Accessibility = m.DeclaredAccessibility.ToString(),
-                        IsStatic = m.IsStatic,
-                        IsAbstract = m.IsAbstract,
-                        IsVirtual = m.IsVirtual,
-                        IsOverride = m.IsOverride
+                        var kinds = kindFilter.Split(',').Select(k => k.Trim().ToLowerInvariant()).ToHashSet();
+                        members = members.Where(m => kinds.Contains(m.Kind.ToString().ToLowerInvariant()));
+                    }
+
+                    // Filter by accessibility (Public, Private, Protected, Internal)
+                    if (!string.IsNullOrEmpty(accessibilityFilter))
+                    {
+                        var accessLevels = accessibilityFilter.Split(',').Select(a => a.Trim().ToLowerInvariant()).ToHashSet();
+                        members = members.Where(m => accessLevels.Contains(m.DeclaredAccessibility.ToString().ToLowerInvariant()));
+                    }
+
+                    // Skip compiler-generated backing fields (e.g., <PropertyName>k__BackingField)
+                    members = members.Where(m => !m.IsImplicitlyDeclared);
+
+                    var memberInfos = members.Select(m =>
+                    {
+                        var info = new MemberInfo
+                        {
+                            Name = m.Name,
+                            Kind = m.Kind.ToString(),
+                            ReturnType = (m as IMethodSymbol)?.ReturnType.ToDisplayString() ??
+                                        (m as IPropertySymbol)?.Type.ToDisplayString() ??
+                                        (m as IFieldSymbol)?.Type.ToDisplayString(),
+                            Signature = m.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
+                            Documentation = m.GetDocumentationCommentXml(),
+                            Modifiers = GetModifiers(m),
+                            Accessibility = m.DeclaredAccessibility.ToString(),
+                            IsStatic = m.IsStatic,
+                            IsAbstract = m.IsAbstract,
+                            IsVirtual = m.IsVirtual,
+                            IsOverride = m.IsOverride
+                        };
+                        if (m is IFieldSymbol fieldSymbol && fieldSymbol.HasConstantValue)
+                        {
+                            info.Value = fieldSymbol.ConstantValue?.ToString();
+                        }
+                        return info;
                     }).ToList();
 
                     return CreateSuccessResponse(memberInfos);
