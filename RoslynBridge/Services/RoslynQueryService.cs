@@ -89,6 +89,7 @@ namespace RoslynBridge.Services
                     QueryTypes.FindImplementations => await _symbolService.FindImplementationsAsync(request),
                     QueryTypes.GetCallHierarchy => await _symbolService.GetCallHierarchyAsync(request),
                     QueryTypes.GetSymbolContext => await _symbolService.GetSymbolContextAsync(request),
+                    QueryTypes.GetSymbolSource => await _symbolService.GetSymbolSourceAsync(request),
 
                     // Document queries
                     QueryTypes.GetDocument => await _documentService.GetDocumentInfoAsync(request),

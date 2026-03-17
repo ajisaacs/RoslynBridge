@@ -482,5 +482,94 @@ namespace RoslynBridge.Services
 
             return CreateSuccessResponse(context);
         }
+
+        public async Task<QueryResponse> GetSymbolSourceAsync(QueryRequest request)
+        {
+            if (string.IsNullOrEmpty(request.SymbolName))
+            {
+                return CreateErrorResponse("SymbolName is required");
+            }
+
+            var results = new List<SymbolSourceInfo>();
+            var searchName = request.SymbolName!;
+
+            foreach (var project in Workspace?.CurrentSolution.Projects ?? Enumerable.Empty<Project>())
+            {
+                var compilation = await project.GetCompilationAsync();
+                if (compilation == null) continue;
+
+                // Try exact match first, then ends-with fallback
+                var symbols = compilation.GetSymbolsWithName(
+                    name => name.Equals(searchName, StringComparison.OrdinalIgnoreCase),
+                    SymbolFilter.All);
+
+                if (!symbols.Any())
+                {
+                    symbols = compilation.GetSymbolsWithName(
+                        name => searchName.EndsWith("." + name, StringComparison.OrdinalIgnoreCase) ||
+                                name.Equals(searchName, StringComparison.OrdinalIgnoreCase),
+                        SymbolFilter.All);
+                }
+
+                foreach (var symbol in symbols)
+                {
+                    // Check if fully qualified name matches for dotted names
+                    if (searchName.Contains("."))
+                    {
+                        var fullName = symbol.ToDisplayString();
+                        if (!fullName.EndsWith(searchName, StringComparison.OrdinalIgnoreCase) &&
+                            !fullName.Equals(searchName, StringComparison.OrdinalIgnoreCase))
+                        {
+                            continue;
+                        }
+                    }
+
+                    foreach (var syntaxRef in symbol.DeclaringSyntaxReferences)
+                    {
+                        var node = await syntaxRef.GetSyntaxAsync();
+                        var lineSpan = node.GetLocation().GetLineSpan();
+
+                        // Get source: node.ToString() excludes leading/trailing trivia from adjacent declarations
+                        var source = node.ToString();
+
+                        // Prepend XML doc comment trivia if present
+                        var leadingTrivia = node.GetLeadingTrivia();
+                        var docComment = leadingTrivia
+                            .Where(t => t.IsKind(Microsoft.CodeAnalysis.CSharp.SyntaxKind.SingleLineDocumentationCommentTrivia) ||
+                                        t.IsKind(Microsoft.CodeAnalysis.CSharp.SyntaxKind.MultiLineDocumentationCommentTrivia))
+                            .Select(t => t.ToFullString())
+                            .FirstOrDefault();
+
+                        if (docComment != null)
+                        {
+                            source = docComment + source;
+                        }
+
+                        results.Add(new SymbolSourceInfo
+                        {
+                            SymbolName = symbol.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
+                            Kind = symbol.Kind.ToString(),
+                            FilePath = lineSpan.Path,
+                            StartLine = lineSpan.StartLinePosition.Line + 1,
+                            EndLine = lineSpan.EndLinePosition.Line + 1,
+                            Source = source
+                        });
+                    }
+                }
+            }
+
+            if (!results.Any())
+            {
+                return CreateErrorResponse($"Symbol '{request.SymbolName}' not found");
+            }
+
+            // Deduplicate by file+line (same symbol found via multiple projects)
+            results = results
+                .GroupBy(r => $"{r.FilePath}:{r.StartLine}")
+                .Select(g => g.First())
+                .ToList();
+
+            return CreateSuccessResponse(results);
+        }
     }
 }
