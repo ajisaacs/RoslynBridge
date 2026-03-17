@@ -19,14 +19,14 @@ The MCP server is configured in `.mcp.json` at the project root:
 }
 ```
 
-### Available MCP Tools (30 total)
+### Available MCP Tools (32 total)
 
 **Diagnostics (3):**
 - `get_diagnostics` - Get compiler errors and warnings
 - `get_diagnostics_summary` - Get counts by severity
 - `get_diagnostics_count` - Get total diagnostic count
 
-**Symbols (11):**
+**Symbols (13):**
 - `get_symbol` - Get symbol info at a position
 - `find_references` - Find all references to a symbol
 - `get_references_count` - Count references
@@ -38,6 +38,8 @@ The MCP server is configured in `.mcp.json` at the project root:
 - `search_code` - Regex pattern search
 - `get_symbol_context` - Get symbol context info
 - `get_namespace_types` - Get types in a namespace
+- `get_symbol_source` - Get source code of a symbol by name
+- `find_usages` - Find files referencing a symbol (by name, returns file paths grouped by project)
 
 **Projects (8):**
 - `get_projects` - List all projects
