@@ -170,7 +170,7 @@ public class RoslynWebApiClient : IRoslynWebApiClient
     }
 
     // Advanced Symbol Operations (via query endpoint)
-    public async Task<JsonDocument> GetTypeMembersAsync(string typeName, bool includeInherited = false, string? solutionName = null, CancellationToken ct = default)
+    public async Task<JsonDocument> GetTypeMembersAsync(string typeName, bool includeInherited = false, string? kind = null, string? accessibility = null, string? solutionName = null, CancellationToken ct = default)
     {
         var query = BuildQuery(("solutionName", solutionName));
         var body = new Dictionary<string, object>
@@ -178,10 +178,15 @@ public class RoslynWebApiClient : IRoslynWebApiClient
             ["queryType"] = "gettypemembers",
             ["symbolName"] = typeName
         };
+        var parameters = new Dictionary<string, string>();
         if (includeInherited)
-        {
-            body["parameters"] = new Dictionary<string, string> { ["includeInherited"] = "true" };
-        }
+            parameters["includeInherited"] = "true";
+        if (!string.IsNullOrEmpty(kind))
+            parameters["kind"] = kind;
+        if (!string.IsNullOrEmpty(accessibility))
+            parameters["accessibility"] = accessibility;
+        if (parameters.Count > 0)
+            body["parameters"] = parameters;
         return await PostAsync($"/api/roslyn/query{query}", body, ct);
     }
 
@@ -272,6 +277,28 @@ public class RoslynWebApiClient : IRoslynWebApiClient
         {
             ["queryType"] = "getnamespacetypes",
             ["symbolName"] = namespaceName
+        };
+        return await PostAsync($"/api/roslyn/query{query}", body, ct);
+    }
+
+    public async Task<JsonDocument> GetSymbolSourceAsync(string symbolName, string? solutionName = null, CancellationToken ct = default)
+    {
+        var query = BuildQuery(("solutionName", solutionName));
+        var body = new Dictionary<string, object>
+        {
+            ["queryType"] = "getsymbolsource",
+            ["symbolName"] = symbolName
+        };
+        return await PostAsync($"/api/roslyn/query{query}", body, ct);
+    }
+
+    public async Task<JsonDocument> FindUsagesAsync(string symbolName, string? solutionName = null, CancellationToken ct = default)
+    {
+        var query = BuildQuery(("solutionName", solutionName));
+        var body = new Dictionary<string, object>
+        {
+            ["queryType"] = "findusages",
+            ["symbolName"] = symbolName
         };
         return await PostAsync($"/api/roslyn/query{query}", body, ct);
     }
