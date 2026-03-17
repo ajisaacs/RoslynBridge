@@ -83,15 +83,73 @@ public class SymbolTools
     /// Get all members of a type (methods, properties, fields, etc.)
     /// </summary>
     [McpServerTool(Name = "get_type_members")]
-    [Description("Get all members of a type including methods, properties, fields, and events. Optionally include inherited members.")]
+    [Description("Get all members of a type including methods, properties, fields, and events. Optionally filter by kind/accessibility. Returns compact one-line-per-member format by default.")]
     public async Task<string> GetTypeMembers(
         [Description("Fully qualified type name (e.g., 'MyNamespace.MyClass')")] string typeName,
         [Description("Include inherited members from base types")] bool includeInherited = false,
+        [Description("Filter by member kind: Method, Property, Field, Event (comma-separated)")] string? kind = null,
+        [Description("Filter by accessibility: Public, Private, Protected, Internal (comma-separated)")] string? accessibility = null,
         [Description("Optional solution name to target a specific VS instance")] string? solutionName = null,
         CancellationToken ct = default)
     {
-        var result = await _client.GetTypeMembersAsync(typeName, includeInherited, solutionName, ct);
-        return FormatResult(result);
+        var result = await _client.GetTypeMembersAsync(typeName, includeInherited, kind, accessibility, solutionName, ct);
+        return FormatTypeMembersCompact(result, typeName);
+    }
+
+    private static string FormatTypeMembersCompact(JsonDocument doc, string typeName)
+    {
+        var root = doc.RootElement;
+        if (!root.TryGetProperty("success", out var success) || !success.GetBoolean())
+            return FormatResult(doc);
+
+        if (!root.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Array)
+            return FormatResult(doc);
+
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"Type: {typeName} ({data.GetArrayLength()} members)");
+        sb.AppendLine(new string('-', 60));
+
+        // Group by kind for readability
+        var grouped = new Dictionary<string, List<string>>();
+        foreach (var member in data.EnumerateArray())
+        {
+            var memberKind = member.TryGetProperty("kind", out var k) ? k.GetString() ?? "Unknown" : "Unknown";
+            var sig = member.TryGetProperty("signature", out var s) ? s.GetString() ?? "" : "";
+            var acc = member.TryGetProperty("accessibility", out var a) ? a.GetString() ?? "" : "";
+            var isStatic = member.TryGetProperty("isStatic", out var st) && st.GetBoolean();
+
+            var prefix = acc.ToLowerInvariant();
+            if (isStatic) prefix += " static";
+
+            var value = member.TryGetProperty("value", out var v) && v.ValueKind != JsonValueKind.Null ? v.GetString() : null;
+            var line = value != null ? $"  {prefix} {sig} = {value}" : $"  {prefix} {sig}";
+
+            if (!grouped.ContainsKey(memberKind))
+                grouped[memberKind] = new List<string>();
+            grouped[memberKind].Add(line);
+        }
+
+        // Output in a predictable order
+        var kindOrder = new[] { "Method", "Property", "Field", "Event" };
+        foreach (var kindName in kindOrder)
+        {
+            if (grouped.TryGetValue(kindName, out var items))
+            {
+                sb.AppendLine($"\n{kindName}s ({items.Count}):");
+                foreach (var item in items)
+                    sb.AppendLine(item);
+                grouped.Remove(kindName);
+            }
+        }
+        // Any remaining kinds
+        foreach (var kvp in grouped)
+        {
+            sb.AppendLine($"\n{kvp.Key}s ({kvp.Value.Count}):");
+            foreach (var item in kvp.Value)
+                sb.AppendLine(item);
+        }
+
+        return sb.ToString();
     }
 
     /// <summary>
@@ -186,6 +244,111 @@ public class SymbolTools
     {
         var result = await _client.GetNamespaceTypesAsync(namespaceName, solutionName, ct);
         return FormatResult(result);
+    }
+
+    /// <summary>
+    /// Get the source code of a symbol by name
+    /// </summary>
+    [McpServerTool(Name = "get_symbol_source")]
+    [Description("Get the actual source code (implementation) of a symbol by name. Returns the full declaration including method bodies. Supports types, methods, properties, fields, enums. For 'MyClass.MyMethod' syntax, returns just that member. Partial types return each partial declaration separately.")]
+    public async Task<string> GetSymbolSource(
+        [Description("Symbol name - simple (e.g., 'MyClass') or dotted (e.g., 'MyClass.MyMethod')")] string symbolName,
+        [Description("Optional solution name to target a specific VS instance")] string? solutionName = null,
+        CancellationToken ct = default)
+    {
+        var result = await _client.GetSymbolSourceAsync(symbolName, solutionName, ct);
+        return FormatSymbolSource(result, symbolName);
+    }
+
+    /// <summary>
+    /// Find all files that reference a symbol (lightweight alternative to find_references)
+    /// </summary>
+    [McpServerTool(Name = "find_usages")]
+    [Description("Find all files that reference a symbol, grouped by project. Lightweight alternative to find_references — takes a symbol name (not file position) and returns just file paths, not line-level locations. Ideal for refactoring discovery ('what files use this type?').")]
+    public async Task<string> FindUsages(
+        [Description("Symbol name to find usages of (e.g., 'EntityType', 'MyClass.MyMethod')")] string symbolName,
+        [Description("Optional solution name to target a specific VS instance")] string? solutionName = null,
+        CancellationToken ct = default)
+    {
+        var result = await _client.FindUsagesAsync(symbolName, solutionName, ct);
+        return FormatUsages(result, symbolName);
+    }
+
+    private static string FormatSymbolSource(JsonDocument doc, string symbolName)
+    {
+        var root = doc.RootElement;
+        if (!root.TryGetProperty("success", out var success) || !success.GetBoolean())
+            return FormatResult(doc);
+
+        if (!root.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Array)
+            return FormatResult(doc);
+
+        var sb = new System.Text.StringBuilder();
+        var count = data.GetArrayLength();
+        if (count == 0)
+            return $"No source found for '{symbolName}'";
+
+        foreach (var item in data.EnumerateArray())
+        {
+            var name = item.TryGetProperty("symbolName", out var n) ? n.GetString() ?? "" : "";
+            var kind = item.TryGetProperty("kind", out var k) ? k.GetString() ?? "" : "";
+            var filePath = item.TryGetProperty("filePath", out var fp) ? fp.GetString() ?? "" : "";
+            var startLine = item.TryGetProperty("startLine", out var sl) ? sl.GetInt32() : 0;
+            var endLine = item.TryGetProperty("endLine", out var el) ? el.GetInt32() : 0;
+            var source = item.TryGetProperty("source", out var src) ? src.GetString() ?? "" : "";
+
+            sb.AppendLine($"=== {name} ({kind}) ===");
+            sb.AppendLine($"File: {filePath} (lines {startLine}-{endLine})");
+            sb.AppendLine();
+            sb.AppendLine(source);
+
+            if (count > 1)
+                sb.AppendLine();
+        }
+
+        return TruncateOutput(sb);
+    }
+
+    private static string FormatUsages(JsonDocument doc, string symbolName)
+    {
+        var root = doc.RootElement;
+        if (!root.TryGetProperty("success", out var success) || !success.GetBoolean())
+            return FormatResult(doc);
+
+        if (!root.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Object)
+            return FormatResult(doc);
+
+        var name = data.TryGetProperty("symbolName", out var n) ? n.GetString() ?? symbolName : symbolName;
+        var totalRefs = data.TryGetProperty("totalReferences", out var tr) ? tr.GetInt32() : 0;
+        var fileCount = data.TryGetProperty("fileCount", out var fc) ? fc.GetInt32() : 0;
+
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"Symbol: {name} ({totalRefs} references in {fileCount} files)");
+        sb.AppendLine();
+
+        if (data.TryGetProperty("filesByProject", out var fbp) && fbp.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var project in fbp.EnumerateObject())
+            {
+                var files = project.Value.EnumerateArray().Select(f => f.GetString() ?? "").ToList();
+                sb.AppendLine($"{project.Name} ({files.Count} files):");
+                foreach (var file in files)
+                    sb.AppendLine($"  {file}");
+                sb.AppendLine();
+            }
+        }
+
+        return TruncateOutput(sb);
+    }
+
+    private const int MaxOutputChars = 50_000;
+
+    private static string TruncateOutput(System.Text.StringBuilder sb)
+    {
+        var result = sb.ToString().TrimEnd();
+        if (result.Length <= MaxOutputChars)
+            return result;
+        return result[..MaxOutputChars] + "\n\n...[output truncated at 50K chars — try a more specific symbol name like 'MyClass.MyMethod']";
     }
 
     private static string FormatResult(JsonDocument doc)
