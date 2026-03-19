@@ -18,6 +18,58 @@ namespace RoslynBridge.Services
         {
         }
 
+        /// <summary>
+        /// Resolve a named type across all projects with fuzzy fallback.
+        /// Tries: exact metadata name → exact GetSymbolsWithName → short-name search with FQN suffix match.
+        /// </summary>
+        private async Task<INamedTypeSymbol?> ResolveTypeAsync(string typeName)
+        {
+            foreach (var project in Workspace?.CurrentSolution.Projects ?? Enumerable.Empty<Project>())
+            {
+                var compilation = await project.GetCompilationAsync();
+                if (compilation == null) continue;
+
+                // 1. Exact metadata name lookup
+                var typeSymbol = compilation.GetTypeByMetadataName(typeName);
+                if (typeSymbol != null) return typeSymbol;
+
+                // 2. Exact simple-name match
+                typeSymbol = compilation.GetSymbolsWithName(typeName, SymbolFilter.Type)
+                    .FirstOrDefault() as INamedTypeSymbol;
+                if (typeSymbol != null) return typeSymbol;
+            }
+
+            // 3. Fuzzy fallback: extract short name and search, then verify FQN suffix
+            var shortName = typeName.Contains(".") ? typeName.Substring(typeName.LastIndexOf('.') + 1) : typeName;
+
+            foreach (var project in Workspace?.CurrentSolution.Projects ?? Enumerable.Empty<Project>())
+            {
+                var compilation = await project.GetCompilationAsync();
+                if (compilation == null) continue;
+
+                var candidates = compilation.GetSymbolsWithName(
+                    name => name.Equals(shortName, StringComparison.OrdinalIgnoreCase),
+                    SymbolFilter.Type);
+
+                foreach (var candidate in candidates)
+                {
+                    if (candidate is INamedTypeSymbol namedType)
+                    {
+                        var fullName = namedType.ToDisplayString();
+                        // Accept if FQN ends with the requested name or short name matches exactly
+                        if (fullName.EndsWith(typeName, StringComparison.OrdinalIgnoreCase) ||
+                            fullName.Equals(typeName, StringComparison.OrdinalIgnoreCase) ||
+                            namedType.Name.Equals(shortName, StringComparison.OrdinalIgnoreCase))
+                        {
+                            return namedType;
+                        }
+                    }
+                }
+            }
+
+            return null;
+        }
+
         public async Task<QueryResponse> GetSymbolInfoAsync(QueryRequest request)
         {
             if (string.IsNullOrEmpty(request.FilePath))
@@ -83,7 +135,20 @@ namespace RoslynBridge.Services
             string? kind = null;
             request.Parameters?.TryGetValue("kind", out kind);
 
-            foreach (var project in Workspace?.CurrentSolution.Projects ?? Enumerable.Empty<Project>())
+            string? projectFilter = null;
+            request.Parameters?.TryGetValue("projectName", out projectFilter);
+
+            string? excludeGeneratedStr = null;
+            request.Parameters?.TryGetValue("excludeGenerated", out excludeGeneratedStr);
+            var excludeGenerated = excludeGeneratedStr != "false"; // default true
+
+            var projects = Workspace?.CurrentSolution.Projects ?? Enumerable.Empty<Project>();
+            if (!string.IsNullOrEmpty(projectFilter))
+            {
+                projects = projects.Where(p => p.Name.Equals(projectFilter, StringComparison.OrdinalIgnoreCase));
+            }
+
+            foreach (var project in projects)
             {
                 var compilation = await project.GetCompilationAsync();
                 if (compilation == null) continue;
@@ -102,11 +167,35 @@ namespace RoslynBridge.Services
                         continue;
                     }
 
+                    // Exclude symbols declared in generated/designer files
+                    if (excludeGenerated && IsInGeneratedFile(symbol))
+                    {
+                        continue;
+                    }
+
                     symbols.Add(await CreateSymbolInfoAsync(symbol));
                 }
             }
 
             return CreateSuccessResponse(symbols);
+        }
+
+        private static bool IsInGeneratedFile(ISymbol symbol)
+        {
+            foreach (var location in symbol.Locations)
+            {
+                var filePath = location.SourceTree?.FilePath;
+                if (string.IsNullOrEmpty(filePath)) continue;
+
+                var p = filePath.Replace('/', '\\').ToLowerInvariant();
+                if (p.EndsWith(".designer.cs") || p.EndsWith(".generated.cs") ||
+                    p.EndsWith(".g.cs") || p.EndsWith(".g.i.cs") ||
+                    p.Contains("\\obj\\") || p.Contains("\\bin\\"))
+                {
+                    return true;
+                }
+            }
+            return false;
         }
 
         public async Task<QueryResponse> GetTypeMembersAsync(QueryRequest request)
@@ -126,67 +215,60 @@ namespace RoslynBridge.Services
             string? accessibilityFilter = null;
             request.Parameters?.TryGetValue("accessibility", out accessibilityFilter);
 
-            foreach (var project in Workspace?.CurrentSolution.Projects ?? Enumerable.Empty<Project>())
+            var typeSymbol = await ResolveTypeAsync(request.SymbolName!);
+
+            if (typeSymbol == null)
             {
-                var compilation = await project.GetCompilationAsync();
-                if (compilation == null) continue;
-
-                var typeSymbol = compilation.GetTypeByMetadataName(request.SymbolName!) ??
-                                 compilation.GetSymbolsWithName(request.SymbolName!, SymbolFilter.Type).FirstOrDefault() as INamedTypeSymbol;
-
-                if (typeSymbol != null)
-                {
-                    var members = includeInherited
-                        ? typeSymbol.GetMembers()
-                        : typeSymbol.GetMembers().Where(m => m.ContainingType.Equals(typeSymbol, SymbolEqualityComparer.Default));
-
-                    // Filter by kind (Method, Property, Field, Event)
-                    if (!string.IsNullOrEmpty(kindFilter))
-                    {
-                        var kinds = kindFilter.Split(',').Select(k => k.Trim().ToLowerInvariant()).ToHashSet();
-                        members = members.Where(m => kinds.Contains(m.Kind.ToString().ToLowerInvariant()));
-                    }
-
-                    // Filter by accessibility (Public, Private, Protected, Internal)
-                    if (!string.IsNullOrEmpty(accessibilityFilter))
-                    {
-                        var accessLevels = accessibilityFilter.Split(',').Select(a => a.Trim().ToLowerInvariant()).ToHashSet();
-                        members = members.Where(m => accessLevels.Contains(m.DeclaredAccessibility.ToString().ToLowerInvariant()));
-                    }
-
-                    // Skip compiler-generated backing fields (e.g., <PropertyName>k__BackingField)
-                    members = members.Where(m => !m.IsImplicitlyDeclared);
-
-                    var memberInfos = members.Select(m =>
-                    {
-                        var info = new MemberInfo
-                        {
-                            Name = m.Name,
-                            Kind = m.Kind.ToString(),
-                            ReturnType = (m as IMethodSymbol)?.ReturnType.ToDisplayString() ??
-                                        (m as IPropertySymbol)?.Type.ToDisplayString() ??
-                                        (m as IFieldSymbol)?.Type.ToDisplayString(),
-                            Signature = m.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
-                            Documentation = m.GetDocumentationCommentXml(),
-                            Modifiers = GetModifiers(m),
-                            Accessibility = m.DeclaredAccessibility.ToString(),
-                            IsStatic = m.IsStatic,
-                            IsAbstract = m.IsAbstract,
-                            IsVirtual = m.IsVirtual,
-                            IsOverride = m.IsOverride
-                        };
-                        if (m is IFieldSymbol fieldSymbol && fieldSymbol.HasConstantValue)
-                        {
-                            info.Value = fieldSymbol.ConstantValue?.ToString();
-                        }
-                        return info;
-                    }).ToList();
-
-                    return CreateSuccessResponse(memberInfos);
-                }
+                return CreateErrorResponse($"Type '{request.SymbolName}' not found");
             }
 
-            return CreateErrorResponse($"Type '{request.SymbolName}' not found");
+            var members = includeInherited
+                ? typeSymbol.GetMembers()
+                : typeSymbol.GetMembers().Where(m => m.ContainingType.Equals(typeSymbol, SymbolEqualityComparer.Default));
+
+            // Filter by kind (Method, Property, Field, Event)
+            if (!string.IsNullOrEmpty(kindFilter))
+            {
+                var kinds = kindFilter.Split(',').Select(k => k.Trim().ToLowerInvariant()).ToHashSet();
+                members = members.Where(m => kinds.Contains(m.Kind.ToString().ToLowerInvariant()));
+            }
+
+            // Filter by accessibility (Public, Private, Protected, Internal)
+            if (!string.IsNullOrEmpty(accessibilityFilter))
+            {
+                var accessLevels = accessibilityFilter.Split(',').Select(a => a.Trim().ToLowerInvariant()).ToHashSet();
+                members = members.Where(m => accessLevels.Contains(m.DeclaredAccessibility.ToString().ToLowerInvariant()));
+            }
+
+            // Skip compiler-generated backing fields (e.g., <PropertyName>k__BackingField)
+            members = members.Where(m => !m.IsImplicitlyDeclared);
+
+            var memberInfos = members.Select(m =>
+            {
+                var info = new MemberInfo
+                {
+                    Name = m.Name,
+                    Kind = m.Kind.ToString(),
+                    ReturnType = (m as IMethodSymbol)?.ReturnType.ToDisplayString() ??
+                                (m as IPropertySymbol)?.Type.ToDisplayString() ??
+                                (m as IFieldSymbol)?.Type.ToDisplayString(),
+                    Signature = m.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
+                    Documentation = m.GetDocumentationCommentXml(),
+                    Modifiers = GetModifiers(m),
+                    Accessibility = m.DeclaredAccessibility.ToString(),
+                    IsStatic = m.IsStatic,
+                    IsAbstract = m.IsAbstract,
+                    IsVirtual = m.IsVirtual,
+                    IsOverride = m.IsOverride
+                };
+                if (m is IFieldSymbol fieldSymbol && fieldSymbol.HasConstantValue)
+                {
+                    info.Value = fieldSymbol.ConstantValue?.ToString();
+                }
+                return info;
+            }).ToList();
+
+            return CreateSuccessResponse(memberInfos);
         }
 
         public async Task<QueryResponse> GetTypeHierarchyAsync(QueryRequest request)
@@ -200,52 +282,45 @@ namespace RoslynBridge.Services
             request.Parameters?.TryGetValue("direction", out direction);
             direction = direction ?? "both";
 
-            foreach (var project in Workspace?.CurrentSolution.Projects ?? Enumerable.Empty<Project>())
+            var typeSymbol = await ResolveTypeAsync(request.SymbolName!);
+
+            if (typeSymbol == null)
             {
-                var compilation = await project.GetCompilationAsync();
-                if (compilation == null) continue;
+                return CreateErrorResponse($"Type '{request.SymbolName}' not found");
+            }
 
-                var typeSymbol = compilation.GetTypeByMetadataName(request.SymbolName!) ??
-                                 compilation.GetSymbolsWithName(request.SymbolName!, SymbolFilter.Type).FirstOrDefault() as INamedTypeSymbol;
+            var hierarchy = new TypeHierarchyInfo
+            {
+                TypeName = typeSymbol.Name,
+                FullName = typeSymbol.ToDisplayString(),
+                BaseTypes = new List<string>(),
+                Interfaces = typeSymbol.Interfaces.Select(i => i.ToDisplayString()).ToList(),
+                DerivedTypes = new List<string>()
+            };
 
-                if (typeSymbol != null)
+            // Get base types
+            if (direction == "up" || direction == "both")
+            {
+                var baseType = typeSymbol.BaseType;
+                while (baseType != null && baseType.SpecialType != SpecialType.System_Object)
                 {
-                    var hierarchy = new TypeHierarchyInfo
-                    {
-                        TypeName = typeSymbol.Name,
-                        FullName = typeSymbol.ToDisplayString(),
-                        BaseTypes = new List<string>(),
-                        Interfaces = typeSymbol.Interfaces.Select(i => i.ToDisplayString()).ToList(),
-                        DerivedTypes = new List<string>()
-                    };
-
-                    // Get base types
-                    if (direction == "up" || direction == "both")
-                    {
-                        var baseType = typeSymbol.BaseType;
-                        while (baseType != null && baseType.SpecialType != SpecialType.System_Object)
-                        {
-                            hierarchy.BaseTypes.Add(baseType.ToDisplayString());
-                            baseType = baseType.BaseType;
-                        }
-                    }
-
-                    // Get derived types
-                    if (direction == "down" || direction == "both")
-                    {
-                        if (Workspace?.CurrentSolution == null)
-                        {
-                            return CreateErrorResponse("Workspace not available");
-                        }
-                        var derivedTypes = await SymbolFinder.FindDerivedClassesAsync(typeSymbol, Workspace.CurrentSolution, true);
-                        hierarchy.DerivedTypes = derivedTypes.Select(t => t.ToDisplayString()).ToList();
-                    }
-
-                    return CreateSuccessResponse(hierarchy);
+                    hierarchy.BaseTypes.Add(baseType.ToDisplayString());
+                    baseType = baseType.BaseType;
                 }
             }
 
-            return CreateErrorResponse($"Type '{request.SymbolName}' not found");
+            // Get derived types
+            if (direction == "down" || direction == "both")
+            {
+                if (Workspace?.CurrentSolution == null)
+                {
+                    return CreateErrorResponse("Workspace not available");
+                }
+                var derivedTypes = await SymbolFinder.FindDerivedClassesAsync(typeSymbol, Workspace.CurrentSolution, true);
+                hierarchy.DerivedTypes = derivedTypes.Select(t => t.ToDisplayString()).ToList();
+            }
+
+            return CreateSuccessResponse(hierarchy);
         }
 
         public async Task<QueryResponse> FindImplementationsAsync(QueryRequest request)
@@ -260,15 +335,7 @@ namespace RoslynBridge.Services
             // Find by name
             if (!string.IsNullOrEmpty(request.SymbolName))
             {
-                foreach (var project in Workspace?.CurrentSolution.Projects ?? Enumerable.Empty<Project>())
-                {
-                    var compilation = await project.GetCompilationAsync();
-                    if (compilation == null) continue;
-
-                    targetSymbol = compilation.GetTypeByMetadataName(request.SymbolName!) ??
-                                   compilation.GetSymbolsWithName(request.SymbolName!, SymbolFilter.Type).FirstOrDefault();
-                    if (targetSymbol != null) break;
-                }
+                targetSymbol = await ResolveTypeAsync(request.SymbolName!);
             }
             // Find by location
             else if (!string.IsNullOrEmpty(request.FilePath) && request.Line.HasValue && request.Column.HasValue)
@@ -664,6 +731,97 @@ namespace RoslynBridge.Services
             };
 
             return CreateSuccessResponse(result);
+        }
+
+        public async Task<QueryResponse> FindCallersAsync(QueryRequest request)
+        {
+            if (string.IsNullOrEmpty(request.SymbolName))
+            {
+                return CreateErrorResponse("SymbolName is required (e.g., 'MyClass.MyMethod' or 'MyMethod')");
+            }
+
+            if (Workspace?.CurrentSolution == null)
+            {
+                return CreateErrorResponse("Workspace not available");
+            }
+
+            var searchName = request.SymbolName!;
+            var allSymbols = new List<ISymbol>();
+
+            foreach (var project in Workspace.CurrentSolution.Projects)
+            {
+                var compilation = await project.GetCompilationAsync();
+                if (compilation == null) continue;
+
+                // Extract the method/member name (last segment after dot)
+                var memberName = searchName.Contains(".") ? searchName.Substring(searchName.LastIndexOf('.') + 1) : searchName;
+
+                var symbols = compilation.GetSymbolsWithName(
+                    name => name.Equals(memberName, StringComparison.OrdinalIgnoreCase),
+                    SymbolFilter.All);
+
+                foreach (var symbol in symbols)
+                {
+                    // For dotted names, verify the containing type matches
+                    if (searchName.Contains("."))
+                    {
+                        var fullName = symbol.ToDisplayString();
+                        if (!fullName.EndsWith(searchName, StringComparison.OrdinalIgnoreCase) &&
+                            !fullName.Equals(searchName, StringComparison.OrdinalIgnoreCase))
+                        {
+                            // Also try ContainingType.Name + "." + Name
+                            var qualName = symbol.ContainingType != null
+                                ? symbol.ContainingType.Name + "." + symbol.Name
+                                : symbol.Name;
+                            if (!qualName.Equals(searchName, StringComparison.OrdinalIgnoreCase))
+                            {
+                                continue;
+                            }
+                        }
+                    }
+                    allSymbols.Add(symbol);
+                }
+            }
+
+            if (!allSymbols.Any())
+            {
+                return CreateErrorResponse($"Symbol '{request.SymbolName}' not found");
+            }
+
+            // Deduplicate
+            var uniqueSymbols = allSymbols
+                .GroupBy(s => s.ToDisplayString())
+                .Select(g => g.First())
+                .ToList();
+
+            var callers = new List<CallerInfo>();
+
+            foreach (var symbol in uniqueSymbols)
+            {
+                var callerResults = await SymbolFinder.FindCallersAsync(symbol, Workspace.CurrentSolution);
+                foreach (var caller in callerResults)
+                {
+                    foreach (var location in caller.Locations)
+                    {
+                        callers.Add(new CallerInfo
+                        {
+                            CallerName = caller.CallingSymbol.Name,
+                            CallerType = caller.CallingSymbol.ContainingType?.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
+                            CallerSignature = caller.CallingSymbol.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
+                            FilePath = location.SourceTree?.FilePath,
+                            Line = location.GetLineSpan().StartLinePosition.Line + 1,
+                            ProjectName = caller.CallingSymbol.ContainingAssembly?.Name
+                        });
+                    }
+                }
+            }
+
+            return CreateSuccessResponse(new
+            {
+                symbolName = uniqueSymbols.First().ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
+                totalCallers = callers.Count,
+                callers = callers
+            });
         }
     }
 }

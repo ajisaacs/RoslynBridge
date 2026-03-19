@@ -76,9 +76,13 @@ public class RoslynWebApiClient : IRoslynWebApiClient
         return await GetAsync($"/api/roslyn/references/count{query}", ct);
     }
 
-    public async Task<JsonDocument> SearchSymbolAsync(string symbolName, string? kind = null, CancellationToken ct = default)
+    public async Task<JsonDocument> SearchSymbolAsync(string symbolName, string? kind = null, string? projectName = null, bool excludeGenerated = true, CancellationToken ct = default)
     {
-        var query = BuildQuery(("symbolName", symbolName), ("kind", kind));
+        var query = BuildQuery(
+            ("symbolName", symbolName),
+            ("kind", kind),
+            ("projectName", projectName),
+            ("excludeGenerated", excludeGenerated ? null : "false"));
         return await GetAsync($"/api/roslyn/symbol/search{query}", ct);
     }
 
@@ -242,7 +246,7 @@ public class RoslynWebApiClient : IRoslynWebApiClient
         return await PostAsync($"/api/roslyn/query{query}", body, ct);
     }
 
-    public async Task<JsonDocument> SearchCodeAsync(string pattern, string? scope = null, string? solutionName = null, CancellationToken ct = default)
+    public async Task<JsonDocument> SearchCodeAsync(string pattern, string? scope = null, string? projectName = null, string? mode = null, string? solutionName = null, CancellationToken ct = default)
     {
         var query = BuildQuery(("solutionName", solutionName));
         var body = new Dictionary<string, object>
@@ -250,10 +254,15 @@ public class RoslynWebApiClient : IRoslynWebApiClient
             ["queryType"] = "searchcode",
             ["symbolName"] = pattern
         };
+        var parameters = new Dictionary<string, string>();
         if (!string.IsNullOrEmpty(scope))
-        {
-            body["parameters"] = new Dictionary<string, string> { ["scope"] = scope };
-        }
+            parameters["scope"] = scope;
+        if (!string.IsNullOrEmpty(projectName))
+            parameters["projectName"] = projectName;
+        if (!string.IsNullOrEmpty(mode))
+            parameters["mode"] = mode;
+        if (parameters.Count > 0)
+            body["parameters"] = parameters;
         return await PostAsync($"/api/roslyn/query{query}", body, ct);
     }
 
@@ -298,6 +307,17 @@ public class RoslynWebApiClient : IRoslynWebApiClient
         var body = new Dictionary<string, object>
         {
             ["queryType"] = "findusages",
+            ["symbolName"] = symbolName
+        };
+        return await PostAsync($"/api/roslyn/query{query}", body, ct);
+    }
+
+    public async Task<JsonDocument> FindCallersAsync(string symbolName, string? solutionName = null, CancellationToken ct = default)
+    {
+        var query = BuildQuery(("solutionName", solutionName));
+        var body = new Dictionary<string, object>
+        {
+            ["queryType"] = "findcallers",
             ["symbolName"] = symbolName
         };
         return await PostAsync($"/api/roslyn/query{query}", body, ct);

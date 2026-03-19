@@ -958,6 +958,8 @@ public class RoslynController : ControllerBase
     /// </summary>
     /// <param name="symbolName">Symbol name or pattern</param>
     /// <param name="kind">Optional symbol kind filter</param>
+    /// <param name="projectName">Optional project name to restrict search scope</param>
+    /// <param name="excludeGenerated">Exclude results from .Designer.cs and other generated files (default: true)</param>
     /// <param name="instancePort">Optional: specific VS instance port to target</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>List of matching symbols</returns>
@@ -966,19 +968,25 @@ public class RoslynController : ControllerBase
     public async Task<ActionResult<RoslynQueryResponse>> FindSymbol(
         [FromQuery] string symbolName,
         [FromQuery] string? kind = null,
+        [FromQuery] string? projectName = null,
+        [FromQuery] bool excludeGenerated = true,
         [FromQuery] int? instancePort = null,
         CancellationToken cancellationToken = default)
     {
+        var parameters = new Dictionary<string, string>();
+        if (!string.IsNullOrEmpty(kind))
+            parameters["kind"] = kind;
+        if (!string.IsNullOrEmpty(projectName))
+            parameters["projectName"] = projectName;
+        if (!excludeGenerated)
+            parameters["excludeGenerated"] = "false";
+
         var request = new RoslynQueryRequest
         {
             QueryType = "findsymbol",
-            SymbolName = symbolName
+            SymbolName = symbolName,
+            Parameters = parameters.Count > 0 ? parameters : null
         };
-
-        if (!string.IsNullOrEmpty(kind))
-        {
-            request.Parameters = new Dictionary<string, string> { ["kind"] = kind };
-        }
 
         var result = await _bridgeClient.ExecuteQueryAsync(request, instancePort, null, cancellationToken);
         return Ok(result);

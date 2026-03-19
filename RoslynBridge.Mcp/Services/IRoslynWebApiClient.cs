@@ -16,7 +16,7 @@ public interface IRoslynWebApiClient
     Task<JsonDocument> GetSymbolAsync(string filePath, int line, int column, string? fields = null, CancellationToken ct = default);
     Task<JsonDocument> FindReferencesAsync(string filePath, int line, int column, string? fields = null, CancellationToken ct = default);
     Task<JsonDocument> GetReferencesCountAsync(string filePath, int line, int column, CancellationToken ct = default);
-    Task<JsonDocument> SearchSymbolAsync(string symbolName, string? kind = null, CancellationToken ct = default);
+    Task<JsonDocument> SearchSymbolAsync(string symbolName, string? kind = null, string? projectName = null, bool excludeGenerated = true, CancellationToken ct = default);
 
     // Projects
     Task<JsonDocument> GetProjectsAsync(string? solutionName = null, CancellationToken ct = default);
@@ -43,11 +43,12 @@ public interface IRoslynWebApiClient
     Task<JsonDocument> GetTypeHierarchyAsync(string typeName, string? direction = null, string? solutionName = null, CancellationToken ct = default);
     Task<JsonDocument> FindImplementationsAsync(string? symbolName = null, string? filePath = null, int? line = null, int? column = null, string? solutionName = null, CancellationToken ct = default);
     Task<JsonDocument> GetCallHierarchyAsync(string filePath, int line, int column, string? direction = null, string? solutionName = null, CancellationToken ct = default);
-    Task<JsonDocument> SearchCodeAsync(string pattern, string? scope = null, string? solutionName = null, CancellationToken ct = default);
+    Task<JsonDocument> SearchCodeAsync(string pattern, string? scope = null, string? projectName = null, string? mode = null, string? solutionName = null, CancellationToken ct = default);
     Task<JsonDocument> GetSymbolContextAsync(string filePath, int line, int column, string? solutionName = null, CancellationToken ct = default);
     Task<JsonDocument> GetNamespaceTypesAsync(string namespaceName, string? solutionName = null, CancellationToken ct = default);
     Task<JsonDocument> GetSymbolSourceAsync(string symbolName, string? solutionName = null, CancellationToken ct = default);
     Task<JsonDocument> FindUsagesAsync(string symbolName, string? solutionName = null, CancellationToken ct = default);
+    Task<JsonDocument> FindCallersAsync(string symbolName, string? solutionName = null, CancellationToken ct = default);
 
     // Additional Project Operations (via query endpoint)
     Task<JsonDocument> CleanProjectAsync(string projectName, string? solutionName = null, CancellationToken ct = default);

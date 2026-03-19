@@ -35,6 +35,7 @@ namespace RoslynBridge.Constants
         public const string SearchCode = "searchcode";
         public const string GetSymbolSource = "getsymbolsource";
         public const string FindUsages = "findusages";
+        public const string FindCallers = "findcallers";
 
         // Editing endpoints
         public const string ApplyCodeFix = "applycodefix";

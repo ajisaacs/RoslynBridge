@@ -19,23 +19,24 @@ The MCP server is configured in `.mcp.json` at the project root:
 }
 ```
 
-### Available MCP Tools (32 total)
+### Available MCP Tools (33 total)
 
 **Diagnostics (3):**
 - `get_diagnostics` - Get compiler errors and warnings
 - `get_diagnostics_summary` - Get counts by severity
 - `get_diagnostics_count` - Get total diagnostic count
 
-**Symbols (13):**
+**Symbols (14):**
 - `get_symbol` - Get symbol info at a position
-- `find_references` - Find all references to a symbol
+- `find_references` - Find all references to a symbol (position-based)
 - `get_references_count` - Count references
-- `search_symbol` - Search symbols by name
-- `get_type_members` - Get members of a type
-- `get_type_hierarchy` - Get inheritance hierarchy
-- `find_implementations` - Find interface implementations
-- `get_call_hierarchy` - Get callers/callees
-- `search_code` - Regex pattern search
+- `search_symbol` - Search symbols by name. Supports `projectName` filter and auto-excludes .Designer.cs files
+- `get_type_members` - Get members of a type. Supports fuzzy matching (short name fallback when FQN doesn't resolve)
+- `get_type_hierarchy` - Get inheritance hierarchy (also uses fuzzy type resolution)
+- `find_implementations` - Find interface implementations (also uses fuzzy type resolution)
+- `get_call_hierarchy` - Get callers/callees (position-based)
+- `find_callers` - Find callers of a method by name (e.g., 'MyClass.MyMethod') - no file position needed
+- `search_code` - Regex search of actual source text (default) or symbol names. Supports `projectName` filter
 - `get_symbol_context` - Get symbol context info
 - `get_namespace_types` - Get types in a namespace
 - `get_symbol_source` - Get source code of a symbol by name

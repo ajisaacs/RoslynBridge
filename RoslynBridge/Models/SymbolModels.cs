@@ -75,4 +75,22 @@ namespace RoslynBridge.Models
         public int FileCount { get; set; }
         public Dictionary<string, List<string>>? FilesByProject { get; set; }
     }
+
+    public class CodeSearchMatch
+    {
+        public string? FilePath { get; set; }
+        public string? ProjectName { get; set; }
+        public int Line { get; set; }
+        public string? Text { get; set; }
+    }
+
+    public class CallerInfo
+    {
+        public string? CallerName { get; set; }
+        public string? CallerType { get; set; }
+        public string? CallerSignature { get; set; }
+        public string? FilePath { get; set; }
+        public int Line { get; set; }
+        public string? ProjectName { get; set; }
+    }
 }

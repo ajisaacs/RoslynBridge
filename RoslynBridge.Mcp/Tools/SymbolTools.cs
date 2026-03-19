@@ -69,13 +69,15 @@ public class SymbolTools
     /// Search for symbols by name
     /// </summary>
     [McpServerTool(Name = "search_symbol")]
-    [Description("Search for symbols by name across the solution. Supports partial matching.")]
+    [Description("Search for symbols by name across the solution (or a specific project). Supports partial matching. Excludes designer-generated files by default.")]
     public async Task<string> SearchSymbol(
         [Description("Symbol name or pattern to search for")] string symbolName,
         [Description("Optional symbol kind filter (e.g., 'Method', 'Class', 'Property')")] string? kind = null,
+        [Description("Optional project name to restrict search scope (e.g., 'OpenNest.Engine')")] string? projectName = null,
+        [Description("Exclude results from .Designer.cs and other generated files (default: true)")] bool excludeGenerated = true,
         CancellationToken ct = default)
     {
-        var result = await _client.SearchSymbolAsync(symbolName, kind, ct);
+        var result = await _client.SearchSymbolAsync(symbolName, kind, projectName, excludeGenerated, ct);
         return FormatResult(result);
     }
 
@@ -205,15 +207,59 @@ public class SymbolTools
     /// Search code using regex patterns
     /// </summary>
     [McpServerTool(Name = "search_code")]
-    [Description("Search code using regex patterns. More powerful than simple symbol search for finding code structures and patterns.")]
+    [Description("Search source code using regex patterns. By default searches actual source text line-by-line (mode='text'), so patterns like 'override.*Shrink' or 'new List.*NestItem' work as expected. Use mode='symbols' to search symbol names only. Generated/designer files are excluded automatically.")]
     public async Task<string> SearchCode(
-        [Description("Regex pattern to search for (e.g., 'async.*Task', 'DbContext')")] string pattern,
-        [Description("Scope filter: 'all', 'methods', 'classes', 'properties'")] string? scope = null,
+        [Description("Regex pattern to search for (e.g., 'override.*Shrink', 'new List.*NestItem', 'DbContext')")] string pattern,
+        [Description("Optional project name to restrict search scope (e.g., 'OpenNest.Engine')")] string? projectName = null,
+        [Description("Search mode: 'text' (default, searches source lines) or 'symbols' (searches symbol names only)")] string? mode = null,
+        [Description("Scope filter for symbols mode: 'all', 'methods', 'classes', 'properties'")] string? scope = null,
         [Description("Optional solution name to target a specific VS instance")] string? solutionName = null,
         CancellationToken ct = default)
     {
-        var result = await _client.SearchCodeAsync(pattern, scope, solutionName, ct);
-        return FormatResult(result);
+        var result = await _client.SearchCodeAsync(pattern, scope, projectName, mode, solutionName, ct);
+        return FormatSearchCode(result, pattern);
+    }
+
+    private static string FormatSearchCode(JsonDocument doc, string pattern)
+    {
+        var root = doc.RootElement;
+        if (!root.TryGetProperty("success", out var success) || !success.GetBoolean())
+            return FormatResult(doc);
+
+        if (!root.TryGetProperty("data", out var data))
+            return FormatResult(doc);
+
+        // Text mode returns { matches: [...], truncated, message }
+        if (data.ValueKind == JsonValueKind.Object && data.TryGetProperty("matches", out var matches))
+        {
+            var sb = new System.Text.StringBuilder();
+            var truncated = data.TryGetProperty("truncated", out var t) && t.GetBoolean();
+            var matchCount = matches.GetArrayLength();
+            sb.AppendLine($"Pattern: {pattern} ({matchCount} match{(matchCount != 1 ? "es" : "")}{(truncated ? ", truncated" : "")})");
+            sb.AppendLine();
+
+            string? lastFile = null;
+            foreach (var match in matches.EnumerateArray())
+            {
+                var filePath = match.TryGetProperty("filePath", out var fp) ? fp.GetString() ?? "" : "";
+                var project = match.TryGetProperty("projectName", out var pn) ? pn.GetString() ?? "" : "";
+                var line = match.TryGetProperty("line", out var ln) ? ln.GetInt32() : 0;
+                var text = match.TryGetProperty("text", out var tx) ? tx.GetString() ?? "" : "";
+
+                var fileKey = $"{project}:{filePath}";
+                if (fileKey != lastFile)
+                {
+                    sb.AppendLine($"--- {project}: {filePath} ---");
+                    lastFile = fileKey;
+                }
+                sb.AppendLine($"  L{line}: {text}");
+            }
+
+            return TruncateOutput(sb);
+        }
+
+        // Symbols mode returns array of SymbolInfo
+        return FormatResult(doc);
     }
 
     /// <summary>
@@ -258,6 +304,51 @@ public class SymbolTools
     {
         var result = await _client.GetSymbolSourceAsync(symbolName, solutionName, ct);
         return FormatSymbolSource(result, symbolName);
+    }
+
+    /// <summary>
+    /// Find all callers of a method or symbol by name
+    /// </summary>
+    [McpServerTool(Name = "find_callers")]
+    [Description("Find all callers of a method by name. Returns caller method names, containing types, file locations, and line numbers. Use dotted names like 'MyClass.MyMethod' for precision, or just 'MyMethod' for broad search. This is the name-based equivalent of get_call_hierarchy — no file position needed.")]
+    public async Task<string> FindCallers(
+        [Description("Symbol name to find callers of (e.g., 'ShrinkFiller.Shrink', 'MyMethod')")] string symbolName,
+        [Description("Optional solution name to target a specific VS instance")] string? solutionName = null,
+        CancellationToken ct = default)
+    {
+        var result = await _client.FindCallersAsync(symbolName, solutionName, ct);
+        return FormatCallers(result, symbolName);
+    }
+
+    private static string FormatCallers(JsonDocument doc, string symbolName)
+    {
+        var root = doc.RootElement;
+        if (!root.TryGetProperty("success", out var success) || !success.GetBoolean())
+            return FormatResult(doc);
+
+        if (!root.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Object)
+            return FormatResult(doc);
+
+        var name = data.TryGetProperty("symbolName", out var n) ? n.GetString() ?? symbolName : symbolName;
+        var totalCallers = data.TryGetProperty("totalCallers", out var tc) ? tc.GetInt32() : 0;
+
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"Callers of {name} ({totalCallers} call site{(totalCallers != 1 ? "s" : "")}):");
+        sb.AppendLine();
+
+        if (data.TryGetProperty("callers", out var callers) && callers.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var caller in callers.EnumerateArray())
+            {
+                var sig = caller.TryGetProperty("callerSignature", out var cs) ? cs.GetString() ?? "" : "";
+                var filePath = caller.TryGetProperty("filePath", out var fp) ? fp.GetString() ?? "" : "";
+                var line = caller.TryGetProperty("line", out var ln) ? ln.GetInt32() : 0;
+                sb.AppendLine($"  {sig}");
+                sb.AppendLine($"    {filePath}:{line}");
+            }
+        }
+
+        return TruncateOutput(sb);
     }
 
     /// <summary>

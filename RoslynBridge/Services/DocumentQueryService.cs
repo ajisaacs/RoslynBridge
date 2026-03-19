@@ -279,27 +279,51 @@ namespace RoslynBridge.Services
         {
             if (string.IsNullOrEmpty(request.SymbolName))
             {
-                return CreateErrorResponse("SymbolName (search pattern) is required");
+                return CreateErrorResponse("Search pattern is required");
             }
 
             string? scope = null;
             request.Parameters?.TryGetValue("scope", out scope);
             scope = scope ?? "all";
+
+            string? projectFilter = null;
+            request.Parameters?.TryGetValue("projectName", out projectFilter);
+
+            // "text" mode searches actual source text; "symbols" mode searches symbol names (legacy behavior)
+            string? mode = null;
+            request.Parameters?.TryGetValue("mode", out mode);
+            mode = mode ?? "text"; // default to text search since that's what users expect
+
+            if (mode == "symbols")
+            {
+                return await SearchCodeBySymbolNameAsync(request.SymbolName, scope, projectFilter);
+            }
+
+            return await SearchCodeBySourceTextAsync(request.SymbolName, projectFilter);
+        }
+
+        private async Task<QueryResponse> SearchCodeBySymbolNameAsync(string pattern, string scope, string? projectFilter)
+        {
             var results = new List<RoslynBridge.Models.SymbolInfo>();
 
-            foreach (var project in Workspace?.CurrentSolution.Projects ?? Enumerable.Empty<Project>())
+            var projects = Workspace?.CurrentSolution.Projects ?? Enumerable.Empty<Project>();
+            if (!string.IsNullOrEmpty(projectFilter))
+            {
+                projects = projects.Where(p => p.Name.Equals(projectFilter, System.StringComparison.OrdinalIgnoreCase));
+            }
+
+            foreach (var project in projects)
             {
                 var compilation = await project.GetCompilationAsync();
                 if (compilation == null) continue;
 
                 var symbols = compilation.GetSymbolsWithName(
-                    name => System.Text.RegularExpressions.Regex.IsMatch(name, request.SymbolName),
+                    name => System.Text.RegularExpressions.Regex.IsMatch(name, pattern),
                     SymbolFilter.All
                 );
 
                 foreach (var symbol in symbols)
                 {
-                    // Filter by scope
                     if (scope != "all")
                     {
                         var symbolKind = symbol.Kind.ToString().ToLowerInvariant();
@@ -313,6 +337,83 @@ namespace RoslynBridge.Services
             }
 
             return CreateSuccessResponse(results);
+        }
+
+        private async Task<QueryResponse> SearchCodeBySourceTextAsync(string pattern, string? projectFilter)
+        {
+            var results = new List<CodeSearchMatch>();
+            System.Text.RegularExpressions.Regex regex;
+            try
+            {
+                regex = new System.Text.RegularExpressions.Regex(pattern,
+                    System.Text.RegularExpressions.RegexOptions.IgnoreCase |
+                    System.Text.RegularExpressions.RegexOptions.Compiled);
+            }
+            catch (System.ArgumentException ex)
+            {
+                return CreateErrorResponse($"Invalid regex pattern: {ex.Message}");
+            }
+
+            var projects = Workspace?.CurrentSolution.Projects ?? Enumerable.Empty<Project>();
+            if (!string.IsNullOrEmpty(projectFilter))
+            {
+                projects = projects.Where(p => p.Name.Equals(projectFilter, System.StringComparison.OrdinalIgnoreCase));
+            }
+
+            const int maxResults = 200;
+
+            foreach (var project in projects)
+            {
+                foreach (var document in project.Documents)
+                {
+                    var filePath = document.FilePath;
+                    if (string.IsNullOrEmpty(filePath)) continue;
+
+                    // Skip generated files
+                    var lowerPath = filePath.Replace('/', '\\').ToLowerInvariant();
+                    if (lowerPath.Contains("\\obj\\") || lowerPath.Contains("\\bin\\") ||
+                        lowerPath.EndsWith(".designer.cs") || lowerPath.EndsWith(".generated.cs") ||
+                        lowerPath.EndsWith(".g.cs") || lowerPath.EndsWith(".g.i.cs"))
+                    {
+                        continue;
+                    }
+
+                    var sourceText = await document.GetTextAsync();
+                    if (sourceText == null) continue;
+
+                    for (int i = 0; i < sourceText.Lines.Count; i++)
+                    {
+                        var lineText = sourceText.Lines[i].ToString();
+                        if (regex.IsMatch(lineText))
+                        {
+                            results.Add(new CodeSearchMatch
+                            {
+                                FilePath = filePath,
+                                ProjectName = project.Name,
+                                Line = i + 1,
+                                Text = lineText.Trim(),
+                            });
+
+                            if (results.Count >= maxResults)
+                            {
+                                return CreateSuccessResponse(new
+                                {
+                                    matches = results,
+                                    truncated = true,
+                                    message = $"Results capped at {maxResults}. Use projectName filter to narrow search."
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+
+            return CreateSuccessResponse(new
+            {
+                matches = results,
+                truncated = false,
+                message = $"Found {results.Count} match(es)"
+            });
         }
     }
 }
