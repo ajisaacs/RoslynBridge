@@ -91,14 +91,15 @@ public class SymbolTools
         [Description("Include inherited members from base types")] bool includeInherited = false,
         [Description("Filter by member kind: Method, Property, Field, Event (comma-separated)")] string? kind = null,
         [Description("Filter by accessibility: Public, Private, Protected, Internal (comma-separated)")] string? accessibility = null,
+        [Description("Max members to return per kind (e.g., per Methods, Properties). 0 = unlimited. Default 50.")] int limit = 50,
         [Description("Optional solution name to target a specific VS instance")] string? solutionName = null,
         CancellationToken ct = default)
     {
         var result = await _client.GetTypeMembersAsync(typeName, includeInherited, kind, accessibility, solutionName, ct);
-        return FormatTypeMembersCompact(result, typeName);
+        return FormatTypeMembersCompact(result, typeName, limit);
     }
 
-    private static string FormatTypeMembersCompact(JsonDocument doc, string typeName)
+    private static string FormatTypeMembersCompact(JsonDocument doc, string typeName, int limit = 50)
     {
         var root = doc.RootElement;
         if (!root.TryGetProperty("success", out var success) || !success.GetBoolean())
@@ -131,6 +132,8 @@ public class SymbolTools
             grouped[memberKind].Add(line);
         }
 
+        var effectiveLimit = limit > 0 ? limit : int.MaxValue;
+
         // Output in a predictable order
         var kindOrder = new[] { "Method", "Property", "Field", "Event" };
         foreach (var kindName in kindOrder)
@@ -138,8 +141,10 @@ public class SymbolTools
             if (grouped.TryGetValue(kindName, out var items))
             {
                 sb.AppendLine($"\n{kindName}s ({items.Count}):");
-                foreach (var item in items)
+                foreach (var item in items.Take(effectiveLimit))
                     sb.AppendLine(item);
+                if (items.Count > effectiveLimit)
+                    sb.AppendLine($"  ... and {items.Count - effectiveLimit} more (use limit=0 for all)");
                 grouped.Remove(kindName);
             }
         }
@@ -147,8 +152,10 @@ public class SymbolTools
         foreach (var kvp in grouped)
         {
             sb.AppendLine($"\n{kvp.Key}s ({kvp.Value.Count}):");
-            foreach (var item in kvp.Value)
+            foreach (var item in kvp.Value.Take(effectiveLimit))
                 sb.AppendLine(item);
+            if (kvp.Value.Count > effectiveLimit)
+                sb.AppendLine($"  ... and {kvp.Value.Count - effectiveLimit} more (use limit=0 for all)");
         }
 
         return sb.ToString();
