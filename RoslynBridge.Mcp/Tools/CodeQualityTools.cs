@@ -28,7 +28,7 @@ public class CodeQualityTools
         [Description("Optional project name to filter code smells")] string? projectName = null,
         [Description("Optional smell type filter: LongMethod, HighComplexity, TooManyParameters, DeepNesting, LargeClass, LongClass")] string? smellType = null,
         [Description("Optional severity filter: Low, Medium, High, Critical")] string? severity = null,
-        [Description("Optional: return only top N worst code smells")] int? top = null,
+        [Description("Max results to return. 0 = unlimited. Default 50.")] int? top = 50,
         [Description("Optional solution name to target a specific VS instance")] string? solutionName = null,
         CancellationToken ct = default)
     {
@@ -60,11 +60,12 @@ public class CodeQualityTools
         [Description("Minimum similarity percentage 0-100 (default: 80)")] int? similarity = null,
         [Description("Optional class name filter (case-insensitive partial match)")] string? className = null,
         [Description("Optional namespace filter (case-insensitive partial match)")] string? namespaceName = null,
+        [Description("Max results to return. 0 = unlimited. Default 50.")] int limit = 50,
         [Description("Optional solution name to target a specific VS instance")] string? solutionName = null,
         CancellationToken ct = default)
     {
         var result = await _client.GetDuplicatesAsync(minLines, similarity, className, namespaceName, solutionName, ct);
-        return FormatResult(result);
+        return ResultLimiter.LimitArrayResult(result, limit);
     }
 
     private static string FormatResult(JsonDocument doc)

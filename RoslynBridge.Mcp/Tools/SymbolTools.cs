@@ -44,10 +44,11 @@ public class SymbolTools
         [Description("Line number (1-based)")] int line,
         [Description("Column number (0-based)")] int column,
         [Description("Optional comma-separated list of fields to include (e.g., 'filePath,line,column')")] string? fields = null,
+        [Description("Max results to return. 0 = unlimited. Default 50.")] int limit = 50,
         CancellationToken ct = default)
     {
         var result = await _client.FindReferencesAsync(filePath, line, column, fields, ct);
-        return FormatResult(result);
+        return ResultLimiter.LimitArrayResult(result, limit);
     }
 
     /// <summary>
@@ -75,10 +76,11 @@ public class SymbolTools
         [Description("Optional symbol kind filter (e.g., 'Method', 'Class', 'Property')")] string? kind = null,
         [Description("Optional project name to restrict search scope (e.g., 'OpenNest.Engine')")] string? projectName = null,
         [Description("Exclude results from .Designer.cs and other generated files (default: true)")] bool excludeGenerated = true,
+        [Description("Max results to return. 0 = unlimited. Default 50.")] int limit = 50,
         CancellationToken ct = default)
     {
         var result = await _client.SearchSymbolAsync(symbolName, kind, projectName, excludeGenerated, ct);
-        return FormatResult(result);
+        return ResultLimiter.LimitArrayResult(result, limit);
     }
 
     /// <summary>
@@ -169,11 +171,12 @@ public class SymbolTools
     public async Task<string> GetTypeHierarchy(
         [Description("Fully qualified type name (e.g., 'MyNamespace.MyClass')")] string typeName,
         [Description("Direction: 'up' (base types), 'down' (derived types), or 'both'")] string? direction = null,
+        [Description("Max results to return. 0 = unlimited. Default 50.")] int limit = 50,
         [Description("Optional solution name to target a specific VS instance")] string? solutionName = null,
         CancellationToken ct = default)
     {
         var result = await _client.GetTypeHierarchyAsync(typeName, direction, solutionName, ct);
-        return FormatResult(result);
+        return ResultLimiter.LimitArrayResult(result, limit);
     }
 
     /// <summary>
@@ -186,11 +189,12 @@ public class SymbolTools
         [Description("Alternative: file path containing the symbol")] string? filePath = null,
         [Description("Alternative: line number (1-based) of the symbol")] int? line = null,
         [Description("Alternative: column number (0-based) of the symbol")] int? column = null,
+        [Description("Max results to return. 0 = unlimited. Default 50.")] int limit = 50,
         [Description("Optional solution name to target a specific VS instance")] string? solutionName = null,
         CancellationToken ct = default)
     {
         var result = await _client.FindImplementationsAsync(symbolName, filePath, line, column, solutionName, ct);
-        return FormatResult(result);
+        return ResultLimiter.LimitArrayResult(result, limit);
     }
 
     /// <summary>
@@ -203,11 +207,12 @@ public class SymbolTools
         [Description("Line number (1-based)")] int line,
         [Description("Column number (0-based)")] int column,
         [Description("Direction: 'callers' (who calls this) or 'callees' (what this calls)")] string? direction = null,
+        [Description("Max results to return. 0 = unlimited. Default 50.")] int limit = 50,
         [Description("Optional solution name to target a specific VS instance")] string? solutionName = null,
         CancellationToken ct = default)
     {
         var result = await _client.GetCallHierarchyAsync(filePath, line, column, direction, solutionName, ct);
-        return FormatResult(result);
+        return ResultLimiter.LimitArrayResult(result, limit);
     }
 
     /// <summary>
@@ -220,14 +225,15 @@ public class SymbolTools
         [Description("Optional project name to restrict search scope (e.g., 'OpenNest.Engine')")] string? projectName = null,
         [Description("Search mode: 'text' (default, searches source lines) or 'symbols' (searches symbol names only)")] string? mode = null,
         [Description("Scope filter for symbols mode: 'all', 'methods', 'classes', 'properties'")] string? scope = null,
+        [Description("Max results to return. 0 = unlimited. Default 100.")] int limit = 100,
         [Description("Optional solution name to target a specific VS instance")] string? solutionName = null,
         CancellationToken ct = default)
     {
         var result = await _client.SearchCodeAsync(pattern, scope, projectName, mode, solutionName, ct);
-        return FormatSearchCode(result, pattern);
+        return FormatSearchCode(result, pattern, limit);
     }
 
-    private static string FormatSearchCode(JsonDocument doc, string pattern)
+    private static string FormatSearchCode(JsonDocument doc, string pattern, int limit = 100)
     {
         var root = doc.RootElement;
         if (!root.TryGetProperty("success", out var success) || !success.GetBoolean())
@@ -242,12 +248,16 @@ public class SymbolTools
             var sb = new System.Text.StringBuilder();
             var truncated = data.TryGetProperty("truncated", out var t) && t.GetBoolean();
             var matchCount = matches.GetArrayLength();
+            var effectiveLimit = limit > 0 ? limit : int.MaxValue;
             sb.AppendLine($"Pattern: {pattern} ({matchCount} match{(matchCount != 1 ? "es" : "")}{(truncated ? ", truncated" : "")})");
             sb.AppendLine();
 
             string? lastFile = null;
+            var shown = 0;
             foreach (var match in matches.EnumerateArray())
             {
+                if (shown >= effectiveLimit) break;
+
                 var filePath = match.TryGetProperty("filePath", out var fp) ? fp.GetString() ?? "" : "";
                 var project = match.TryGetProperty("projectName", out var pn) ? pn.GetString() ?? "" : "";
                 var line = match.TryGetProperty("line", out var ln) ? ln.GetInt32() : 0;
@@ -260,13 +270,17 @@ public class SymbolTools
                     lastFile = fileKey;
                 }
                 sb.AppendLine($"  L{line}: {text}");
+                shown++;
             }
+
+            if (matchCount > effectiveLimit)
+                sb.AppendLine($"\n... and {matchCount - effectiveLimit} more matches (use limit=0 for all)");
 
             return TruncateOutput(sb);
         }
 
         // Symbols mode returns array of SymbolInfo
-        return FormatResult(doc);
+        return ResultLimiter.LimitArrayResult(doc, limit);
     }
 
     /// <summary>
@@ -292,11 +306,12 @@ public class SymbolTools
     [Description("Get all types (classes, interfaces, structs, enums) defined in a specific namespace.")]
     public async Task<string> GetNamespaceTypes(
         [Description("Namespace name (e.g., 'MyApp.Services')")] string namespaceName,
+        [Description("Max results to return. 0 = unlimited. Default 50.")] int limit = 50,
         [Description("Optional solution name to target a specific VS instance")] string? solutionName = null,
         CancellationToken ct = default)
     {
         var result = await _client.GetNamespaceTypesAsync(namespaceName, solutionName, ct);
-        return FormatResult(result);
+        return ResultLimiter.LimitArrayResult(result, limit);
     }
 
     /// <summary>
@@ -306,11 +321,12 @@ public class SymbolTools
     [Description("Get the actual source code (implementation) of a symbol by name. Returns the full declaration including method bodies. Supports types, methods, properties, fields, enums. For 'MyClass.MyMethod' syntax, returns just that member. Partial types return each partial declaration separately.")]
     public async Task<string> GetSymbolSource(
         [Description("Symbol name - simple (e.g., 'MyClass') or dotted (e.g., 'MyClass.MyMethod')")] string symbolName,
+        [Description("Max source blocks to return (e.g., partial class parts). 0 = unlimited. Default 5.")] int limit = 5,
         [Description("Optional solution name to target a specific VS instance")] string? solutionName = null,
         CancellationToken ct = default)
     {
         var result = await _client.GetSymbolSourceAsync(symbolName, solutionName, ct);
-        return FormatSymbolSource(result, symbolName);
+        return FormatSymbolSource(result, symbolName, limit);
     }
 
     /// <summary>
@@ -320,14 +336,15 @@ public class SymbolTools
     [Description("Find all callers of a method by name. Returns caller method names, containing types, file locations, and line numbers. Use dotted names like 'MyClass.MyMethod' for precision, or just 'MyMethod' for broad search. This is the name-based equivalent of get_call_hierarchy — no file position needed.")]
     public async Task<string> FindCallers(
         [Description("Symbol name to find callers of (e.g., 'ShrinkFiller.Shrink', 'MyMethod')")] string symbolName,
+        [Description("Max callers to return. 0 = unlimited. Default 50.")] int limit = 50,
         [Description("Optional solution name to target a specific VS instance")] string? solutionName = null,
         CancellationToken ct = default)
     {
         var result = await _client.FindCallersAsync(symbolName, solutionName, ct);
-        return FormatCallers(result, symbolName);
+        return FormatCallers(result, symbolName, limit);
     }
 
-    private static string FormatCallers(JsonDocument doc, string symbolName)
+    private static string FormatCallers(JsonDocument doc, string symbolName, int limit = 50)
     {
         var root = doc.RootElement;
         if (!root.TryGetProperty("success", out var success) || !success.GetBoolean())
@@ -343,16 +360,24 @@ public class SymbolTools
         sb.AppendLine($"Callers of {name} ({totalCallers} call site{(totalCallers != 1 ? "s" : "")}):");
         sb.AppendLine();
 
+        var effectiveLimit = limit > 0 ? limit : int.MaxValue;
         if (data.TryGetProperty("callers", out var callers) && callers.ValueKind == JsonValueKind.Array)
         {
+            var shown = 0;
             foreach (var caller in callers.EnumerateArray())
             {
+                if (shown >= effectiveLimit) break;
+
                 var sig = caller.TryGetProperty("callerSignature", out var cs) ? cs.GetString() ?? "" : "";
                 var filePath = caller.TryGetProperty("filePath", out var fp) ? fp.GetString() ?? "" : "";
                 var line = caller.TryGetProperty("line", out var ln) ? ln.GetInt32() : 0;
                 sb.AppendLine($"  {sig}");
                 sb.AppendLine($"    {filePath}:{line}");
+                shown++;
             }
+
+            if (totalCallers > effectiveLimit)
+                sb.AppendLine($"\n  ... and {totalCallers - effectiveLimit} more (use limit=0 for all)");
         }
 
         return TruncateOutput(sb);
@@ -365,14 +390,15 @@ public class SymbolTools
     [Description("Find all files that reference a symbol, grouped by project. Lightweight alternative to find_references — takes a symbol name (not file position) and returns just file paths, not line-level locations. Ideal for refactoring discovery ('what files use this type?').")]
     public async Task<string> FindUsages(
         [Description("Symbol name to find usages of (e.g., 'EntityType', 'MyClass.MyMethod')")] string symbolName,
+        [Description("Max files to return. 0 = unlimited. Default 50.")] int limit = 50,
         [Description("Optional solution name to target a specific VS instance")] string? solutionName = null,
         CancellationToken ct = default)
     {
         var result = await _client.FindUsagesAsync(symbolName, solutionName, ct);
-        return FormatUsages(result, symbolName);
+        return FormatUsages(result, symbolName, limit);
     }
 
-    private static string FormatSymbolSource(JsonDocument doc, string symbolName)
+    private static string FormatSymbolSource(JsonDocument doc, string symbolName, int limit = 5)
     {
         var root = doc.RootElement;
         if (!root.TryGetProperty("success", out var success) || !success.GetBoolean())
@@ -386,8 +412,12 @@ public class SymbolTools
         if (count == 0)
             return $"No source found for '{symbolName}'";
 
+        var effectiveLimit = limit > 0 ? limit : int.MaxValue;
+        var shown = 0;
         foreach (var item in data.EnumerateArray())
         {
+            if (shown >= effectiveLimit) break;
+
             var name = item.TryGetProperty("symbolName", out var n) ? n.GetString() ?? "" : "";
             var kind = item.TryGetProperty("kind", out var k) ? k.GetString() ?? "" : "";
             var filePath = item.TryGetProperty("filePath", out var fp) ? fp.GetString() ?? "" : "";
@@ -402,12 +432,16 @@ public class SymbolTools
 
             if (count > 1)
                 sb.AppendLine();
+            shown++;
         }
+
+        if (count > effectiveLimit)
+            sb.AppendLine($"... and {count - effectiveLimit} more source blocks (use limit=0 for all)");
 
         return TruncateOutput(sb);
     }
 
-    private static string FormatUsages(JsonDocument doc, string symbolName)
+    private static string FormatUsages(JsonDocument doc, string symbolName, int limit = 50)
     {
         var root = doc.RootElement;
         if (!root.TryGetProperty("success", out var success) || !success.GetBoolean())
@@ -424,17 +458,30 @@ public class SymbolTools
         sb.AppendLine($"Symbol: {name} ({totalRefs} references in {fileCount} files)");
         sb.AppendLine();
 
+        var effectiveLimit = limit > 0 ? limit : int.MaxValue;
+        var totalShown = 0;
         if (data.TryGetProperty("filesByProject", out var fbp) && fbp.ValueKind == JsonValueKind.Object)
         {
             foreach (var project in fbp.EnumerateObject())
             {
+                if (totalShown >= effectiveLimit) break;
+
                 var files = project.Value.EnumerateArray().Select(f => f.GetString() ?? "").ToList();
+                var remaining = Math.Max(0, effectiveLimit - totalShown);
                 sb.AppendLine($"{project.Name} ({files.Count} files):");
-                foreach (var file in files)
+                foreach (var file in files.Take(remaining))
+                {
                     sb.AppendLine($"  {file}");
+                    totalShown++;
+                }
+                if (files.Count > remaining)
+                    sb.AppendLine($"  ... and {files.Count - remaining} more files");
                 sb.AppendLine();
             }
         }
+
+        if (fileCount > effectiveLimit)
+            sb.AppendLine($"Showing {Math.Min(effectiveLimit, totalShown)} of {fileCount} files. Use limit=0 for all.");
 
         return TruncateOutput(sb);
     }

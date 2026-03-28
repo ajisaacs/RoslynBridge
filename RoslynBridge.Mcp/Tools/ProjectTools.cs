@@ -42,11 +42,12 @@ public partial class ProjectTools
         [Description("Optional project name to filter files")] string? projectName = null,
         [Description("Optional path filter (case-insensitive contains match)")] string? path = null,
         [Description("Optional filename pattern (glob-style: * and ? wildcards)")] string? pattern = null,
+        [Description("Max results to return. 0 = unlimited. Default 100.")] int limit = 100,
         [Description("Optional solution name to target a specific VS instance")] string? solutionName = null,
         CancellationToken ct = default)
     {
         var result = await _client.GetFilesAsync(projectName, path, pattern, solutionName, ct);
-        return FormatResult(result);
+        return ResultLimiter.LimitArrayResult(result, limit);
     }
 
     /// <summary>
