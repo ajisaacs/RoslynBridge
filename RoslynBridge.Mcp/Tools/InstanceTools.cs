@@ -21,7 +21,7 @@ public class InstanceTools
     /// <summary>
     /// List all registered Visual Studio instances
     /// </summary>
-    [McpServerTool(Name = "list_instances")]
+    [McpServerTool(Name = "list_instances", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("List all registered Visual Studio instances with their solution information and connection status.")]
     public async Task<string> ListInstances(CancellationToken ct = default)
     {
@@ -32,7 +32,7 @@ public class InstanceTools
     /// <summary>
     /// Get instance by solution path
     /// </summary>
-    [McpServerTool(Name = "get_instance_by_solution")]
+    [McpServerTool(Name = "get_instance_by_solution", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("Find the Visual Studio instance that has a specific solution open.")]
     public async Task<string> GetInstanceBySolution(
         [Description("Full path to the solution file (.sln)")] string solutionPath,
@@ -45,7 +45,7 @@ public class InstanceTools
     /// <summary>
     /// Check health of the RoslynBridge service
     /// </summary>
-    [McpServerTool(Name = "check_health")]
+    [McpServerTool(Name = "check_health", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("Check the health status of the RoslynBridge WebAPI service.")]
     public async Task<string> CheckHealth(CancellationToken ct = default)
     {

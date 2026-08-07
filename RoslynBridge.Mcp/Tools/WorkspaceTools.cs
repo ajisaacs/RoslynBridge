@@ -21,7 +21,7 @@ public class WorkspaceTools
     /// <summary>
     /// Refresh the workspace by reloading documents from disk
     /// </summary>
-    [McpServerTool(Name = "refresh_workspace")]
+    [McpServerTool(Name = "refresh_workspace", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("Refresh the Visual Studio workspace by reloading all open documents from disk. Use this after externally modifying files to ensure VS has the latest content for diagnostics and code analysis.")]
     public async Task<string> RefreshWorkspace(
         [Description("Optional solution name to target a specific VS instance")] string? solutionName = null,
@@ -35,7 +35,7 @@ public class WorkspaceTools
     /// <summary>
     /// Format a document using Visual Studio's formatter
     /// </summary>
-    [McpServerTool(Name = "format_document")]
+    [McpServerTool(Name = "format_document", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Format a source file using Visual Studio's code formatter. Applies the solution's formatting rules.")]
     public async Task<string> FormatDocument(
         [Description("Full path to the file to format")] string filePath,

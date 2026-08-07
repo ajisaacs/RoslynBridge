@@ -23,7 +23,7 @@ public partial class ProjectTools
     /// <summary>
     /// Get all projects in the solution
     /// </summary>
-    [McpServerTool(Name = "get_projects")]
+    [McpServerTool(Name = "get_projects", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("Get a list of all projects in the current solution with their metadata.")]
     public async Task<string> GetProjects(
         [Description("Optional solution name to target a specific VS instance")] string? solutionName = null,
@@ -36,7 +36,7 @@ public partial class ProjectTools
     /// <summary>
     /// Get files from projects with optional filtering
     /// </summary>
-    [McpServerTool(Name = "get_files")]
+    [McpServerTool(Name = "get_files", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("Get files from projects with optional filtering by project name, path, or glob pattern.")]
     public async Task<string> GetFiles(
         [Description("Optional project name to filter files")] string? projectName = null,
@@ -53,7 +53,7 @@ public partial class ProjectTools
     /// <summary>
     /// Get solution overview with statistics
     /// </summary>
-    [McpServerTool(Name = "get_solution_overview")]
+    [McpServerTool(Name = "get_solution_overview", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("Get a high-level overview of the solution including project count, file statistics, and overall structure.")]
     public async Task<string> GetSolutionOverview(CancellationToken ct = default)
     {
@@ -64,7 +64,7 @@ public partial class ProjectTools
     /// <summary>
     /// Build a project
     /// </summary>
-    [McpServerTool(Name = "build_project")]
+    [McpServerTool(Name = "build_project", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Build a specific project in the solution. Returns build result with any errors or warnings.")]
     public async Task<string> BuildProject(
         [Description("Name of the project to build")] string projectName,
@@ -78,7 +78,7 @@ public partial class ProjectTools
     /// <summary>
     /// Clean a project
     /// </summary>
-    [McpServerTool(Name = "clean_project")]
+    [McpServerTool(Name = "clean_project", ReadOnly = false, Destructive = true, Idempotent = true, OpenWorld = false)]
     [Description("Clean a project, removing all build outputs (bin and obj folders).")]
     public async Task<string> CleanProject(
         [Description("Name of the project to clean")] string projectName,
@@ -92,7 +92,7 @@ public partial class ProjectTools
     /// <summary>
     /// Restore NuGet packages for a project
     /// </summary>
-    [McpServerTool(Name = "restore_packages")]
+    [McpServerTool(Name = "restore_packages", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = true)]
     [Description("Restore NuGet packages for a project.")]
     public async Task<string> RestorePackages(
         [Description("Name of the project to restore packages for")] string projectName,
@@ -106,7 +106,7 @@ public partial class ProjectTools
     /// <summary>
     /// Add a NuGet package to a project
     /// </summary>
-    [McpServerTool(Name = "add_package")]
+    [McpServerTool(Name = "add_package", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = true)]
     [Description("Add a NuGet package to a project.")]
     public async Task<string> AddPackage(
         [Description("Name of the project to add the package to")] string projectName,
@@ -122,7 +122,7 @@ public partial class ProjectTools
     /// <summary>
     /// Remove a NuGet package from a project
     /// </summary>
-    [McpServerTool(Name = "remove_package")]
+    [McpServerTool(Name = "remove_package", ReadOnly = false, Destructive = true, Idempotent = true, OpenWorld = false)]
     [Description("Remove a NuGet package from a project.")]
     public async Task<string> RemovePackage(
         [Description("Name of the project to remove the package from")] string projectName,
@@ -137,12 +137,6 @@ public partial class ProjectTools
     private static string FormatProjectsCompact(JsonDocument doc)
     {
         var root = doc.RootElement;
-
-        if (root.TryGetProperty("success", out var successProp) && !successProp.GetBoolean())
-        {
-            var error = root.TryGetProperty("error", out var errProp) ? errProp.GetString() : "Unknown error";
-            return $"Error: {error}";
-        }
 
         JsonElement projects;
         if (root.TryGetProperty("data", out var dataProp) && dataProp.ValueKind == JsonValueKind.Array)
@@ -184,13 +178,6 @@ public partial class ProjectTools
     private static string FormatBuildResultCompact(JsonDocument doc)
     {
         var root = doc.RootElement;
-
-        // Check for error response from the API itself
-        if (root.TryGetProperty("success", out var successProp) && !successProp.GetBoolean())
-        {
-            var error = root.TryGetProperty("error", out var errProp) ? errProp.GetString() : "Unknown error";
-            return $"Build failed: {error}";
-        }
 
         // Extract build output fields from data
         if (!root.TryGetProperty("data", out var data))

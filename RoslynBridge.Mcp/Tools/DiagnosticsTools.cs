@@ -22,7 +22,7 @@ public class DiagnosticsTools
     /// <summary>
     /// Get compiler diagnostics (errors and warnings) from the solution
     /// </summary>
-    [McpServerTool(Name = "get_diagnostics")]
+    [McpServerTool(Name = "get_diagnostics", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("Get compiler diagnostics (errors and warnings) from the solution. Optionally filter by file path, severity, or apply pagination.")]
     public async Task<string> GetDiagnostics(
         [Description("Optional file path to filter diagnostics to a specific file")] string? filePath = null,
@@ -39,7 +39,7 @@ public class DiagnosticsTools
     /// <summary>
     /// Get a summary of diagnostics counts by severity
     /// </summary>
-    [McpServerTool(Name = "get_diagnostics_summary")]
+    [McpServerTool(Name = "get_diagnostics_summary", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("Get a summary of diagnostics with counts grouped by severity level (errors, warnings, info, hidden).")]
     public async Task<string> GetDiagnosticsSummary(
         [Description("Optional file path to filter diagnostics to a specific file")] string? filePath = null,
@@ -53,7 +53,7 @@ public class DiagnosticsTools
     /// <summary>
     /// Get the count of diagnostics
     /// </summary>
-    [McpServerTool(Name = "get_diagnostics_count")]
+    [McpServerTool(Name = "get_diagnostics_count", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("Get the count of diagnostics, optionally filtered by file path and severity.")]
     public async Task<string> GetDiagnosticsCount(
         [Description("Optional file path to filter diagnostics to a specific file")] string? filePath = null,
@@ -67,13 +67,6 @@ public class DiagnosticsTools
     private static string FormatDiagnosticsCompact(JsonDocument doc)
     {
         var root = doc.RootElement;
-
-        // Check for error response
-        if (root.TryGetProperty("success", out var successProp) && !successProp.GetBoolean())
-        {
-            var error = root.TryGetProperty("error", out var errProp) ? errProp.GetString() : "Unknown error";
-            return $"Error: {error}";
-        }
 
         // Get the diagnostics array from data property or root
         JsonElement diagnostics;

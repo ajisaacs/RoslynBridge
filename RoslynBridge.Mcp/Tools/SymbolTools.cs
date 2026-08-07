@@ -21,7 +21,7 @@ public class SymbolTools
     /// <summary>
     /// Get symbol information at a specific position in a file
     /// </summary>
-    [McpServerTool(Name = "get_symbol")]
+    [McpServerTool(Name = "get_symbol", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("Get detailed symbol information at a specific position in a file. Returns name, kind, type, documentation, and location.")]
     public async Task<string> GetSymbol(
         [Description("Full file path to the source file")] string filePath,
@@ -37,7 +37,7 @@ public class SymbolTools
     /// <summary>
     /// Find all references to a symbol
     /// </summary>
-    [McpServerTool(Name = "find_references")]
+    [McpServerTool(Name = "find_references", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("Find all references to the symbol at a specific position. Returns locations where the symbol is used.")]
     public async Task<string> FindReferences(
         [Description("Full file path to the source file")] string filePath,
@@ -54,7 +54,7 @@ public class SymbolTools
     /// <summary>
     /// Get the count of references to a symbol
     /// </summary>
-    [McpServerTool(Name = "get_references_count")]
+    [McpServerTool(Name = "get_references_count", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("Get the count of references to the symbol at a specific position.")]
     public async Task<string> GetReferencesCount(
         [Description("Full file path to the source file")] string filePath,
@@ -69,7 +69,7 @@ public class SymbolTools
     /// <summary>
     /// Search for symbols by name
     /// </summary>
-    [McpServerTool(Name = "search_symbol")]
+    [McpServerTool(Name = "search_symbol", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("Search for symbols by name across the solution (or a specific project). Supports partial matching. Excludes designer-generated files by default.")]
     public async Task<string> SearchSymbol(
         [Description("Symbol name or pattern to search for")] string symbolName,
@@ -86,7 +86,7 @@ public class SymbolTools
     /// <summary>
     /// Get all members of a type (methods, properties, fields, etc.)
     /// </summary>
-    [McpServerTool(Name = "get_type_members")]
+    [McpServerTool(Name = "get_type_members", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("Get all members of a type including methods, properties, fields, and events. Optionally filter by kind/accessibility. Returns compact one-line-per-member format by default.")]
     public async Task<string> GetTypeMembers(
         [Description("Fully qualified type name (e.g., 'MyNamespace.MyClass')")] string typeName,
@@ -104,9 +104,6 @@ public class SymbolTools
     private static string FormatTypeMembersCompact(JsonDocument doc, string typeName, int limit = 50)
     {
         var root = doc.RootElement;
-        if (!root.TryGetProperty("success", out var success) || !success.GetBoolean())
-            return FormatResult(doc);
-
         if (!root.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Array)
             return FormatResult(doc);
 
@@ -166,7 +163,7 @@ public class SymbolTools
     /// <summary>
     /// Get the type hierarchy (base types and derived types)
     /// </summary>
-    [McpServerTool(Name = "get_type_hierarchy")]
+    [McpServerTool(Name = "get_type_hierarchy", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("Get the inheritance hierarchy for a type, showing base classes/interfaces and derived types.")]
     public async Task<string> GetTypeHierarchy(
         [Description("Fully qualified type name (e.g., 'MyNamespace.MyClass')")] string typeName,
@@ -182,7 +179,7 @@ public class SymbolTools
     /// <summary>
     /// Find implementations of an interface or abstract class
     /// </summary>
-    [McpServerTool(Name = "find_implementations")]
+    [McpServerTool(Name = "find_implementations", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("Find all implementations of an interface or abstract class. Can search by name or by position in a file.")]
     public async Task<string> FindImplementations(
         [Description("Fully qualified symbol name (e.g., 'MyNamespace.IMyInterface')")] string? symbolName = null,
@@ -200,7 +197,7 @@ public class SymbolTools
     /// <summary>
     /// Get the call hierarchy for a method
     /// </summary>
-    [McpServerTool(Name = "get_call_hierarchy")]
+    [McpServerTool(Name = "get_call_hierarchy", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("Get the call hierarchy showing which methods call this method (callers) or which methods this method calls (callees).")]
     public async Task<string> GetCallHierarchy(
         [Description("Full file path to the source file")] string filePath,
@@ -218,7 +215,7 @@ public class SymbolTools
     /// <summary>
     /// Search code using regex patterns
     /// </summary>
-    [McpServerTool(Name = "search_code")]
+    [McpServerTool(Name = "search_code", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("Search source code using regex patterns. By default searches actual source text line-by-line (mode='text'), so patterns like 'override.*Shrink' or 'new List.*NestItem' work as expected. Use mode='symbols' to search symbol names only. Generated/designer files are excluded automatically.")]
     public async Task<string> SearchCode(
         [Description("Regex pattern to search for (e.g., 'override.*Shrink', 'new List.*NestItem', 'DbContext')")] string pattern,
@@ -236,9 +233,6 @@ public class SymbolTools
     private static string FormatSearchCode(JsonDocument doc, string pattern, int limit = 100)
     {
         var root = doc.RootElement;
-        if (!root.TryGetProperty("success", out var success) || !success.GetBoolean())
-            return FormatResult(doc);
-
         if (!root.TryGetProperty("data", out var data))
             return FormatResult(doc);
 
@@ -286,7 +280,7 @@ public class SymbolTools
     /// <summary>
     /// Get context information for a symbol at a position
     /// </summary>
-    [McpServerTool(Name = "get_symbol_context")]
+    [McpServerTool(Name = "get_symbol_context", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("Get rich context information for a symbol including its containing type, namespace, and surrounding code context.")]
     public async Task<string> GetSymbolContext(
         [Description("Full file path to the source file")] string filePath,
@@ -302,7 +296,7 @@ public class SymbolTools
     /// <summary>
     /// Get all types in a namespace
     /// </summary>
-    [McpServerTool(Name = "get_namespace_types")]
+    [McpServerTool(Name = "get_namespace_types", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("Get all types (classes, interfaces, structs, enums) defined in a specific namespace.")]
     public async Task<string> GetNamespaceTypes(
         [Description("Namespace name (e.g., 'MyApp.Services')")] string namespaceName,
@@ -317,7 +311,7 @@ public class SymbolTools
     /// <summary>
     /// Get the source code of a symbol by name
     /// </summary>
-    [McpServerTool(Name = "get_symbol_source")]
+    [McpServerTool(Name = "get_symbol_source", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("Get the actual source code (implementation) of a symbol by name. Returns the full declaration including method bodies. Supports types, methods, properties, fields, enums. For 'MyClass.MyMethod' syntax, returns just that member. Partial types return each partial declaration separately.")]
     public async Task<string> GetSymbolSource(
         [Description("Symbol name - simple (e.g., 'MyClass') or dotted (e.g., 'MyClass.MyMethod')")] string symbolName,
@@ -332,7 +326,7 @@ public class SymbolTools
     /// <summary>
     /// Find all callers of a method or symbol by name
     /// </summary>
-    [McpServerTool(Name = "find_callers")]
+    [McpServerTool(Name = "find_callers", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("Find all callers of a method by name. Returns caller method names, containing types, file locations, and line numbers. Use dotted names like 'MyClass.MyMethod' for precision, or just 'MyMethod' for broad search. This is the name-based equivalent of get_call_hierarchy — no file position needed.")]
     public async Task<string> FindCallers(
         [Description("Symbol name to find callers of (e.g., 'ShrinkFiller.Shrink', 'MyMethod')")] string symbolName,
@@ -347,9 +341,6 @@ public class SymbolTools
     private static string FormatCallers(JsonDocument doc, string symbolName, int limit = 50)
     {
         var root = doc.RootElement;
-        if (!root.TryGetProperty("success", out var success) || !success.GetBoolean())
-            return FormatResult(doc);
-
         if (!root.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Object)
             return FormatResult(doc);
 
@@ -386,7 +377,7 @@ public class SymbolTools
     /// <summary>
     /// Find all files that reference a symbol (lightweight alternative to find_references)
     /// </summary>
-    [McpServerTool(Name = "find_usages")]
+    [McpServerTool(Name = "find_usages", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("Find all files that reference a symbol, grouped by project. Lightweight alternative to find_references — takes a symbol name (not file position) and returns just file paths, not line-level locations. Ideal for refactoring discovery ('what files use this type?').")]
     public async Task<string> FindUsages(
         [Description("Symbol name to find usages of (e.g., 'EntityType', 'MyClass.MyMethod')")] string symbolName,
@@ -401,9 +392,6 @@ public class SymbolTools
     private static string FormatSymbolSource(JsonDocument doc, string symbolName, int limit = 5)
     {
         var root = doc.RootElement;
-        if (!root.TryGetProperty("success", out var success) || !success.GetBoolean())
-            return FormatResult(doc);
-
         if (!root.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Array)
             return FormatResult(doc);
 
@@ -444,9 +432,6 @@ public class SymbolTools
     private static string FormatUsages(JsonDocument doc, string symbolName, int limit = 50)
     {
         var root = doc.RootElement;
-        if (!root.TryGetProperty("success", out var success) || !success.GetBoolean())
-            return FormatResult(doc);
-
         if (!root.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Object)
             return FormatResult(doc);
 

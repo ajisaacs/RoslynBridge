@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Web;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using ModelContextProtocol;
 using RoslynBridge.Mcp.Configuration;
 
 namespace RoslynBridge.Mcp.Services;
@@ -376,23 +377,15 @@ public class RoslynWebApiClient : IRoslynWebApiClient
             if (!response.IsSuccessStatusCode)
             {
                 _logger.LogWarning("Request failed: {StatusCode} - {Content}", response.StatusCode, content);
-                return JsonDocument.Parse(JsonSerializer.Serialize(new
-                {
-                    success = false,
-                    error = $"HTTP {(int)response.StatusCode}: {content}"
-                }));
+                throw new McpException($"HTTP {(int)response.StatusCode}: {content}");
             }
 
-            return JsonDocument.Parse(content);
+            return ParseSuccessfulResponse(content);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException and not McpException)
         {
             _logger.LogError(ex, "Request failed: {Path}", path);
-            return JsonDocument.Parse(JsonSerializer.Serialize(new
-            {
-                success = false,
-                error = ex.Message
-            }));
+            throw new McpException($"Request to RoslynBridge WebAPI failed: {ex.Message}", ex);
         }
     }
 
@@ -414,24 +407,34 @@ public class RoslynWebApiClient : IRoslynWebApiClient
             if (!response.IsSuccessStatusCode)
             {
                 _logger.LogWarning("Request failed: {StatusCode} - {Content}", response.StatusCode, responseContent);
-                return JsonDocument.Parse(JsonSerializer.Serialize(new
-                {
-                    success = false,
-                    error = $"HTTP {(int)response.StatusCode}: {responseContent}"
-                }));
+                throw new McpException($"HTTP {(int)response.StatusCode}: {responseContent}");
             }
 
-            return JsonDocument.Parse(responseContent);
+            return ParseSuccessfulResponse(responseContent);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException and not McpException)
         {
             _logger.LogError(ex, "Request failed: {Path}", path);
-            return JsonDocument.Parse(JsonSerializer.Serialize(new
-            {
-                success = false,
-                error = ex.Message
-            }));
+            throw new McpException($"Request to RoslynBridge WebAPI failed: {ex.Message}", ex);
         }
+    }
+
+    // The WebAPI returns HTTP 200 even for business-logic failures (e.g. "symbol not
+    // found"), signaling failure via a `success: false` envelope instead. Surface those
+    // the same way as transport failures so tool callers only need to handle one path.
+    private static JsonDocument ParseSuccessfulResponse(string content)
+    {
+        var doc = JsonDocument.Parse(content);
+        var root = doc.RootElement;
+        if (root.ValueKind == JsonValueKind.Object
+            && root.TryGetProperty("success", out var successProp)
+            && successProp.ValueKind == JsonValueKind.False)
+        {
+            var error = root.TryGetProperty("error", out var errProp) ? errProp.GetString() : null;
+            throw new McpException(error ?? "RoslynBridge WebAPI reported an unspecified failure.");
+        }
+
+        return doc;
     }
 
     private static string BuildQuery(params (string key, string? value)[] parameters)

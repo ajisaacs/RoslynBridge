@@ -21,7 +21,7 @@ public class CodeQualityTools
     /// <summary>
     /// Get code smells (long methods, high complexity, etc.)
     /// </summary>
-    [McpServerTool(Name = "get_code_smells")]
+    [McpServerTool(Name = "get_code_smells", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("Detect code smells like long methods, high cyclomatic complexity, too many parameters, deep nesting, and large classes.")]
     public async Task<string> GetCodeSmells(
         [Description("Optional file path to filter code smells to a specific file")] string? filePath = null,
@@ -39,7 +39,7 @@ public class CodeQualityTools
     /// <summary>
     /// Get code smell summary with counts by type
     /// </summary>
-    [McpServerTool(Name = "get_code_smell_summary")]
+    [McpServerTool(Name = "get_code_smell_summary", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("Get a summary of code smells with counts grouped by smell type.")]
     public async Task<string> GetCodeSmellSummary(
         [Description("Optional file path to filter code smells to a specific file")] string? filePath = null,
@@ -53,7 +53,7 @@ public class CodeQualityTools
     /// <summary>
     /// Detect duplicate code blocks
     /// </summary>
-    [McpServerTool(Name = "get_duplicates")]
+    [McpServerTool(Name = "get_duplicates", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("Detect duplicate or similar code blocks across the solution. Useful for identifying refactoring opportunities.")]
     public async Task<string> GetDuplicates(
         [Description("Minimum number of lines for a duplicate block (default: 5)")] int? minLines = null,
