@@ -6,17 +6,10 @@ This project includes an MCP (Model Context Protocol) server that exposes Roslyn
 
 ### MCP Configuration
 
-The MCP server is configured in `.mcp.json` at the project root:
+The MCP server is registered at user scope and runs from the published copy in `~/.claude/mcp/RoslynBridge.Mcp/`. There is deliberately no project `.mcp.json`: a project entry with the same name would shadow the user one and run a stale Debug build.
 
-```json
-{
-  "mcpServers": {
-    "roslyn-bridge": {
-      "command": "dotnet",
-      "args": ["run", "--project", "./RoslynBridge.Mcp/RoslynBridge.Mcp.csproj", "--no-build"]
-    }
-  }
-}
+```bash
+claude mcp add roslyn-bridge -s user -- "C:\Users\aisaacs\.claude\mcp\RoslynBridge.Mcp\RoslynBridge.Mcp.exe"
 ```
 
 ### Available MCP Tools (33 total)
@@ -72,10 +65,12 @@ The MCP server is configured in `.mcp.json` at the project root:
 2. **RoslynBridge.WebApi** running on port 5001
 3. **Solution open** in Visual Studio
 
-### Building the MCP Server
+### Publishing the MCP Server
+
+Changes only take effect after republishing and restarting the Claude session:
 
 ```bash
-dotnet build RoslynBridge.Mcp -c Release
+dotnet publish RoslynBridge.Mcp/RoslynBridge.Mcp.csproj -c Release -o "$USERPROFILE/.claude/mcp/RoslynBridge.Mcp"
 ```
 
 ### Configuration
