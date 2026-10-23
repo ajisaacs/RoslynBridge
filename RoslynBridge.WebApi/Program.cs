@@ -59,7 +59,8 @@ var roslynBridgeUrl = builder.Configuration.GetValue<string>("RoslynBridge:BaseU
 builder.Services.AddHttpClient<IRoslynBridgeClient, RoslynBridgeClient>(client =>
 {
     client.BaseAddress = new Uri(roslynBridgeUrl);
-    client.Timeout = TimeSpan.FromSeconds(30);
+    // Per-request timeouts are applied in RoslynBridgeClient (long for builds, short otherwise)
+    client.Timeout = Timeout.InfiniteTimeSpan;
 });
 
 // Configure Swagger/OpenAPI

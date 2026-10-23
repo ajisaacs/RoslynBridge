@@ -128,16 +128,18 @@ public class RoslynController : ControllerBase
     /// Get solution overview
     /// </summary>
     /// <param name="instancePort">Optional: specific VS instance port to target</param>
+    /// <param name="solutionName">Optional: solution name to route to</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Solution statistics and overview</returns>
     [HttpGet("solution/overview")]
     [ProducesResponseType(typeof(RoslynQueryResponse), StatusCodes.Status200OK)]
     public async Task<ActionResult<RoslynQueryResponse>> GetSolutionOverview(
+        [FromQuery] string? solutionName = null,
         [FromQuery] int? instancePort = null,
         CancellationToken cancellationToken = default)
     {
         var request = new RoslynQueryRequest { QueryType = "getsolutionoverview" };
-        var result = await _bridgeClient.ExecuteQueryAsync(request, instancePort, null, cancellationToken);
+        var result = await _bridgeClient.ExecuteQueryAsync(request, instancePort, solutionName, cancellationToken);
         return Ok(result);
     }
 
@@ -241,6 +243,7 @@ public class RoslynController : ControllerBase
     /// <param name="filePath">Optional file path to filter diagnostics</param>
     /// <param name="severity">Optional severity filter (error, warning, info, hidden)</param>
     /// <param name="instancePort">Optional: specific VS instance port to target</param>
+    /// <param name="solutionName">Optional: solution name to route to</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Count of diagnostics matching the criteria</returns>
     [HttpGet("diagnostics/count")]
@@ -248,6 +251,7 @@ public class RoslynController : ControllerBase
     public async Task<ActionResult<RoslynQueryResponse>> GetDiagnosticsCount(
         [FromQuery] string? filePath = null,
         [FromQuery] string? severity = null,
+        [FromQuery] string? solutionName = null,
         [FromQuery] int? instancePort = null,
         CancellationToken cancellationToken = default)
     {
@@ -256,7 +260,7 @@ public class RoslynController : ControllerBase
             QueryType = "getdiagnostics",
             FilePath = filePath
         };
-        var result = await _bridgeClient.ExecuteQueryAsync(request, instancePort, null, cancellationToken);
+        var result = await _bridgeClient.ExecuteQueryAsync(request, instancePort, solutionName, cancellationToken);
 
         // Server-side: exclude diagnostics from generated files before counting
         result = FilterOutGeneratedDiagnostics(result);
@@ -813,6 +817,7 @@ public class RoslynController : ControllerBase
     /// <param name="column">Column number (0-based)</param>
     /// <param name="fields">Optional: comma-separated list of fields to include in response (e.g., "name,kind,location")</param>
     /// <param name="instancePort">Optional: specific VS instance port to target</param>
+    /// <param name="solutionName">Optional: solution name to route to</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Symbol information</returns>
     [HttpGet("symbol")]
@@ -822,6 +827,7 @@ public class RoslynController : ControllerBase
         [FromQuery] int line,
         [FromQuery] int column,
         [FromQuery] string? fields = null,
+        [FromQuery] string? solutionName = null,
         [FromQuery] int? instancePort = null,
         CancellationToken cancellationToken = default)
     {
@@ -832,7 +838,7 @@ public class RoslynController : ControllerBase
             Line = line,
             Column = column
         };
-        var result = await _bridgeClient.ExecuteQueryAsync(request, instancePort, null, cancellationToken);
+        var result = await _bridgeClient.ExecuteQueryAsync(request, instancePort, solutionName, cancellationToken);
 
         // Apply field projection if requested
         if (!string.IsNullOrEmpty(fields) && result.Success && result.Data != null)
@@ -851,6 +857,7 @@ public class RoslynController : ControllerBase
     /// <param name="column">Column number (0-based)</param>
     /// <param name="fields">Optional: comma-separated list of fields to include in response (e.g., "filePath,line,column")</param>
     /// <param name="instancePort">Optional: specific VS instance port to target</param>
+    /// <param name="solutionName">Optional: solution name to route to</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>List of references</returns>
     [HttpGet("references")]
@@ -860,6 +867,7 @@ public class RoslynController : ControllerBase
         [FromQuery] int line,
         [FromQuery] int column,
         [FromQuery] string? fields = null,
+        [FromQuery] string? solutionName = null,
         [FromQuery] int? instancePort = null,
         CancellationToken cancellationToken = default)
     {
@@ -870,7 +878,7 @@ public class RoslynController : ControllerBase
             Line = line,
             Column = column
         };
-        var result = await _bridgeClient.ExecuteQueryAsync(request, instancePort, null, cancellationToken);
+        var result = await _bridgeClient.ExecuteQueryAsync(request, instancePort, solutionName, cancellationToken);
 
         // Apply field projection if requested
         if (!string.IsNullOrEmpty(fields) && result.Success && result.Data != null)
@@ -888,6 +896,7 @@ public class RoslynController : ControllerBase
     /// <param name="line">Line number (1-based)</param>
     /// <param name="column">Column number (0-based)</param>
     /// <param name="instancePort">Optional: specific VS instance port to target</param>
+    /// <param name="solutionName">Optional: solution name to route to</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Count of references</returns>
     [HttpGet("references/count")]
@@ -896,6 +905,7 @@ public class RoslynController : ControllerBase
         [FromQuery] string filePath,
         [FromQuery] int line,
         [FromQuery] int column,
+        [FromQuery] string? solutionName = null,
         [FromQuery] int? instancePort = null,
         CancellationToken cancellationToken = default)
     {
@@ -906,7 +916,7 @@ public class RoslynController : ControllerBase
             Line = line,
             Column = column
         };
-        var result = await _bridgeClient.ExecuteQueryAsync(request, instancePort, null, cancellationToken);
+        var result = await _bridgeClient.ExecuteQueryAsync(request, instancePort, solutionName, cancellationToken);
 
         if (!result.Success || result.Data == null)
         {
@@ -961,6 +971,7 @@ public class RoslynController : ControllerBase
     /// <param name="projectName">Optional project name to restrict search scope</param>
     /// <param name="excludeGenerated">Exclude results from .Designer.cs and other generated files (default: true)</param>
     /// <param name="instancePort">Optional: specific VS instance port to target</param>
+    /// <param name="solutionName">Optional: solution name to route to</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>List of matching symbols</returns>
     [HttpGet("symbol/search")]
@@ -970,6 +981,7 @@ public class RoslynController : ControllerBase
         [FromQuery] string? kind = null,
         [FromQuery] string? projectName = null,
         [FromQuery] bool excludeGenerated = true,
+        [FromQuery] string? solutionName = null,
         [FromQuery] int? instancePort = null,
         CancellationToken cancellationToken = default)
     {
@@ -988,7 +1000,7 @@ public class RoslynController : ControllerBase
             Parameters = parameters.Count > 0 ? parameters : null
         };
 
-        var result = await _bridgeClient.ExecuteQueryAsync(request, instancePort, null, cancellationToken);
+        var result = await _bridgeClient.ExecuteQueryAsync(request, instancePort, solutionName, cancellationToken);
         return Ok(result);
     }
 
@@ -997,12 +1009,14 @@ public class RoslynController : ControllerBase
     /// </summary>
     /// <param name="filePath">File path to format</param>
     /// <param name="instancePort">Optional: specific VS instance port to target</param>
+    /// <param name="solutionName">Optional: solution name to route to</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Format operation result</returns>
     [HttpPost("format")]
     [ProducesResponseType(typeof(RoslynQueryResponse), StatusCodes.Status200OK)]
     public async Task<ActionResult<RoslynQueryResponse>> FormatDocument(
         [FromBody] string filePath,
+        [FromQuery] string? solutionName = null,
         [FromQuery] int? instancePort = null,
         CancellationToken cancellationToken = default)
     {
@@ -1011,7 +1025,7 @@ public class RoslynController : ControllerBase
             QueryType = "formatdocument",
             FilePath = filePath
         };
-        var result = await _bridgeClient.ExecuteQueryAsync(request, instancePort, null, cancellationToken);
+        var result = await _bridgeClient.ExecuteQueryAsync(request, instancePort, solutionName, cancellationToken);
         return Ok(result);
     }
 
@@ -1022,6 +1036,7 @@ public class RoslynController : ControllerBase
     /// <param name="packageName">NuGet package name</param>
     /// <param name="version">Optional package version</param>
     /// <param name="instancePort">Optional: specific VS instance port to target</param>
+    /// <param name="solutionName">Optional: solution name to route to</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Operation result</returns>
     [HttpPost("project/package/add")]
@@ -1030,6 +1045,7 @@ public class RoslynController : ControllerBase
         [FromQuery] string projectName,
         [FromQuery] string packageName,
         [FromQuery] string? version = null,
+        [FromQuery] string? solutionName = null,
         [FromQuery] int? instancePort = null,
         CancellationToken cancellationToken = default)
     {
@@ -1040,7 +1056,7 @@ public class RoslynController : ControllerBase
             PackageName = packageName,
             Version = version
         };
-        var result = await _bridgeClient.ExecuteQueryAsync(request, instancePort, null, cancellationToken);
+        var result = await _bridgeClient.ExecuteQueryAsync(request, instancePort, solutionName, cancellationToken);
         return Ok(result);
     }
 
@@ -1050,6 +1066,7 @@ public class RoslynController : ControllerBase
     /// <param name="projectName">Project name</param>
     /// <param name="configuration">Build configuration (Debug/Release)</param>
     /// <param name="instancePort">Optional: specific VS instance port to target</param>
+    /// <param name="solutionName">Optional: solution name to route to</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Build result</returns>
     [HttpPost("project/build")]
@@ -1057,6 +1074,7 @@ public class RoslynController : ControllerBase
     public async Task<ActionResult<RoslynQueryResponse>> BuildProject(
         [FromQuery] string projectName,
         [FromQuery] string? configuration = null,
+        [FromQuery] string? solutionName = null,
         [FromQuery] int? instancePort = null,
         CancellationToken cancellationToken = default)
     {
@@ -1066,7 +1084,7 @@ public class RoslynController : ControllerBase
             ProjectName = projectName,
             Configuration = configuration
         };
-        var result = await _bridgeClient.ExecuteQueryAsync(request, instancePort, null, cancellationToken);
+        var result = await _bridgeClient.ExecuteQueryAsync(request, instancePort, solutionName, cancellationToken);
         return Ok(result);
     }
 

@@ -14,6 +14,15 @@ public class RoslynBridgeClient : IRoslynBridgeClient
     private readonly ILogger<RoslynBridgeClient> _logger;
     private readonly JsonSerializerOptions _jsonOptions;
 
+    // Build/package operations run out-of-process in the VS extension and can take
+    // minutes (the extension allows up to 10); everything else should be quick.
+    private static readonly HashSet<string> LongRunningQueryTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "buildproject", "cleanproject", "restorepackages", "addnugetpackage", "removenugetpackage"
+    };
+    private static readonly TimeSpan DefaultQueryTimeout = TimeSpan.FromSeconds(60);
+    private static readonly TimeSpan LongRunningQueryTimeout = TimeSpan.FromMinutes(11);
+
     public RoslynBridgeClient(
         HttpClient httpClient,
         IInstanceRegistryService registryService,
@@ -37,6 +46,20 @@ public class RoslynBridgeClient : IRoslynBridgeClient
     {
         try
         {
+            if (instancePort == null && !string.IsNullOrEmpty(solutionName) && FindBySolutionName(solutionName) == null)
+            {
+                var available = _registryService.GetAllInstances()
+                    .Select(i => i.SolutionName)
+                    .Where(n => !string.IsNullOrEmpty(n))
+                    .ToList();
+                return new RoslynQueryResponse
+                {
+                    Success = false,
+                    Error = $"No Visual Studio instance has solution '{solutionName}' open. " +
+                            $"Open solutions: {(available.Count > 0 ? string.Join(", ", available) : "(none)")}"
+                };
+            }
+
             var targetPort = await ResolveInstancePortAsync(instancePort, request, solutionName);
 
             if (targetPort == null)
@@ -54,7 +77,9 @@ public class RoslynBridgeClient : IRoslynBridgeClient
             var content = new StringContent(json, Encoding.UTF8, "application/json");
 
             var url = $"http://localhost:{targetPort}/query";
-            var response = await _httpClient.PostAsync(url, content, cancellationToken);
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(LongRunningQueryTypes.Contains(request.QueryType) ? LongRunningQueryTimeout : DefaultQueryTimeout);
+            var response = await _httpClient.PostAsync(url, content, timeoutCts.Token);
 
             if (!response.IsSuccessStatusCode)
             {
@@ -82,6 +107,15 @@ public class RoslynBridgeClient : IRoslynBridgeClient
 
             _logger.LogInformation("Query executed successfully: {Success}", result.Success);
             return result;
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogError("Query {QueryType} timed out", request.QueryType);
+            return new RoslynQueryResponse
+            {
+                Success = false,
+                Error = $"Query '{request.QueryType}' timed out waiting for Visual Studio"
+            };
         }
         catch (HttpRequestException ex)
         {
@@ -130,6 +164,20 @@ public class RoslynBridgeClient : IRoslynBridgeClient
     }
 
     /// <summary>
+    /// Finds an instance by solution name, tolerating a trailing .sln/.slnx extension
+    /// </summary>
+    private VSInstanceInfo? FindBySolutionName(string solutionName)
+    {
+        var name = solutionName;
+        if (name.EndsWith(".sln", StringComparison.OrdinalIgnoreCase) || name.EndsWith(".slnx", StringComparison.OrdinalIgnoreCase))
+            name = Path.GetFileNameWithoutExtension(name);
+
+        return _registryService.GetAllInstances()
+            .FirstOrDefault(i => i.SolutionName != null &&
+                                 i.SolutionName.Equals(name, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
     /// Resolves which VS instance port to use based on provided hints
     /// </summary>
     private Task<int?> ResolveInstancePortAsync(int? explicitPort, RoslynQueryRequest? request, string? solutionName = null)
@@ -143,15 +191,11 @@ public class RoslynBridgeClient : IRoslynBridgeClient
         // Try to find instance by solution name
         if (!string.IsNullOrEmpty(solutionName))
         {
-            var matchedInstances = _registryService.GetAllInstances()
-                .Where(i => i.SolutionName != null &&
-                           i.SolutionName.Equals(solutionName, StringComparison.OrdinalIgnoreCase))
-                .ToList();
-
-            if (matchedInstances.Any())
+            var matched = FindBySolutionName(solutionName);
+            if (matched != null)
             {
-                _logger.LogDebug("Found instance by solution name: {SolutionName}, Port: {Port}", solutionName, matchedInstances[0].Port);
-                return Task.FromResult<int?>(matchedInstances[0].Port);
+                _logger.LogDebug("Found instance by solution name: {SolutionName}, Port: {Port}", solutionName, matched.Port);
+                return Task.FromResult<int?>(matched.Port);
             }
 
             _logger.LogWarning("No instance found for solution: {SolutionName}", solutionName);
