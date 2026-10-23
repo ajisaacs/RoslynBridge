@@ -195,6 +195,6 @@ public class DiagnosticsTools
 
     private static string FormatResult(JsonDocument doc)
     {
-        return JsonSerializer.Serialize(doc.RootElement, new JsonSerializerOptions { WriteIndented = true });
+        return ResultLimiter.ToJson(doc);
     }
 }

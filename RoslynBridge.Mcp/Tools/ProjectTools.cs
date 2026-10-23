@@ -200,18 +200,22 @@ public partial class ProjectTools
         // Parse MSBuild error/warning lines from output and stderr
         var combined = output + "\n" + stderr;
         var diagnosticLines = new List<(string Severity, string Code, string File, int Line, string Message)>();
+        // MSBuild repeats every diagnostic in its end-of-build summary (and once per target
+        // framework when multi-targeting), so dedupe or every count comes out doubled.
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var line in combined.Split('\n'))
         {
             var match = MsBuildDiagnosticRegex().Match(line);
             if (match.Success)
             {
-                var file = match.Groups["file"].Value;
+                var file = match.Groups["file"].Value.Trim();
                 var lineNum = int.TryParse(match.Groups["line"].Value, out var ln) ? ln : 0;
                 var severity = match.Groups["severity"].Value;
                 var code = match.Groups["code"].Value;
-                var message = match.Groups["message"].Value.Trim();
-                diagnosticLines.Add((severity, code, file, lineNum, message));
+                var message = ProjectSuffixRegex().Replace(match.Groups["message"].Value.Trim(), "");
+                if (seen.Add($"{file}|{lineNum}|{code}|{message}"))
+                    diagnosticLines.Add((severity, code, file, lineNum, message));
             }
         }
 
@@ -337,8 +341,12 @@ public partial class ProjectTools
     [GeneratedRegex(@"(?<file>[^\(]+)\((?<line>\d+)(?:,\d+)?\)\s*:\s*(?<severity>error|warning)\s+(?<code>\w+)\s*:\s*(?<message>.+)", RegexOptions.IgnoreCase)]
     private static partial Regex MsBuildDiagnosticRegex();
 
+    // Trailing " [C:\path\Project.csproj]" (optionally with "::TargetFramework=...") appended by MSBuild
+    [GeneratedRegex(@"\s*\[[^\[\]]+\.(?:cs|vb|fs)proj(?:::[^\]]*)?\]\s*$", RegexOptions.IgnoreCase)]
+    private static partial Regex ProjectSuffixRegex();
+
     private static string FormatResult(JsonDocument doc)
     {
-        return JsonSerializer.Serialize(doc.RootElement, new JsonSerializerOptions { WriteIndented = true });
+        return ResultLimiter.ToJson(doc);
     }
 }

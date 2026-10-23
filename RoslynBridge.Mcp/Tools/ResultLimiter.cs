@@ -8,7 +8,13 @@ namespace RoslynBridge.Mcp.Tools;
 /// </summary>
 internal static class ResultLimiter
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new() { WriteIndented = true };
+    // Compact output: indentation inflates token usage without helping the reader.
+    private static readonly JsonSerializerOptions SerializerOptions = new() { WriteIndented = false };
+
+    /// <summary>
+    /// Serializes a full API response as compact JSON.
+    /// </summary>
+    public static string ToJson(JsonDocument doc) => JsonSerializer.Serialize(doc.RootElement, SerializerOptions);
 
     /// <summary>
     /// Truncates the 'data' array in a standard API response to the specified limit.
@@ -29,7 +35,7 @@ internal static class ResultLimiter
             return JsonSerializer.Serialize(doc.RootElement, SerializerOptions);
 
         using var stream = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true }))
+        using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = false }))
         {
             writer.WriteStartObject();
             foreach (var prop in root.EnumerateObject())
