@@ -39,9 +39,10 @@ public class WorkspaceTools
     [Description("Format a source file using Visual Studio's code formatter. Applies the solution's formatting rules.")]
     public async Task<string> FormatDocument(
         [Description("Full path to the file to format")] string filePath,
+        [Description("Optional solution name to target a specific VS instance")] string? solutionName = null,
         CancellationToken ct = default)
     {
-        var result = await _client.FormatDocumentAsync(filePath, ct);
+        var result = await _client.FormatDocumentAsync(filePath, solutionName, ct);
         return FormatResult(result);
     }
 

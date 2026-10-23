@@ -10,19 +10,19 @@ public interface IRoslynWebApiClient
     // Diagnostics
     Task<JsonDocument> GetDiagnosticsAsync(string? filePath = null, string? severity = null, int? limit = null, int? offset = null, string? solutionName = null, CancellationToken ct = default);
     Task<JsonDocument> GetDiagnosticsSummaryAsync(string? filePath = null, string? solutionName = null, CancellationToken ct = default);
-    Task<JsonDocument> GetDiagnosticsCountAsync(string? filePath = null, string? severity = null, CancellationToken ct = default);
+    Task<JsonDocument> GetDiagnosticsCountAsync(string? filePath = null, string? severity = null, string? solutionName = null, CancellationToken ct = default);
 
     // Symbols
     Task<JsonDocument> GetSymbolAsync(string filePath, int line, int column, string? fields = null, CancellationToken ct = default);
     Task<JsonDocument> FindReferencesAsync(string filePath, int line, int column, string? fields = null, CancellationToken ct = default);
     Task<JsonDocument> GetReferencesCountAsync(string filePath, int line, int column, CancellationToken ct = default);
-    Task<JsonDocument> SearchSymbolAsync(string symbolName, string? kind = null, string? projectName = null, bool excludeGenerated = true, CancellationToken ct = default);
+    Task<JsonDocument> SearchSymbolAsync(string symbolName, string? kind = null, string? projectName = null, bool excludeGenerated = true, string? solutionName = null, CancellationToken ct = default);
 
     // Projects
     Task<JsonDocument> GetProjectsAsync(string? solutionName = null, CancellationToken ct = default);
     Task<JsonDocument> GetFilesAsync(string? projectName = null, string? path = null, string? pattern = null, string? solutionName = null, CancellationToken ct = default);
-    Task<JsonDocument> GetSolutionOverviewAsync(CancellationToken ct = default);
-    Task<JsonDocument> BuildProjectAsync(string projectName, string? configuration = null, CancellationToken ct = default);
+    Task<JsonDocument> GetSolutionOverviewAsync(string? solutionName = null, CancellationToken ct = default);
+    Task<JsonDocument> BuildProjectAsync(string projectName, string? configuration = null, string? solutionName = null, CancellationToken ct = default);
 
     // Code Quality
     Task<JsonDocument> GetCodeSmellsAsync(string? filePath = null, string? projectName = null, string? smellType = null, string? severity = null, int? top = null, string? solutionName = null, CancellationToken ct = default);
@@ -36,7 +36,7 @@ public interface IRoslynWebApiClient
 
     // Workspace
     Task<JsonDocument> RefreshWorkspaceAsync(string? solutionName = null, string? filePath = null, CancellationToken ct = default);
-    Task<JsonDocument> FormatDocumentAsync(string filePath, CancellationToken ct = default);
+    Task<JsonDocument> FormatDocumentAsync(string filePath, string? solutionName = null, CancellationToken ct = default);
 
     // Advanced Symbol Operations (via query endpoint)
     Task<JsonDocument> GetTypeMembersAsync(string typeName, bool includeInherited = false, string? kind = null, string? accessibility = null, string? solutionName = null, CancellationToken ct = default);

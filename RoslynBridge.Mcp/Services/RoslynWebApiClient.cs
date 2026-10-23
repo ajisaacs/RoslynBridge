@@ -41,9 +41,9 @@ public class RoslynWebApiClient : IRoslynWebApiClient
         return await GetAsync($"/api/roslyn/diagnostics/summary{query}", ct);
     }
 
-    public async Task<JsonDocument> GetDiagnosticsCountAsync(string? filePath = null, string? severity = null, CancellationToken ct = default)
+    public async Task<JsonDocument> GetDiagnosticsCountAsync(string? filePath = null, string? severity = null, string? solutionName = null, CancellationToken ct = default)
     {
-        var query = BuildQuery(("filePath", filePath), ("severity", severity));
+        var query = BuildQuery(("filePath", filePath), ("severity", severity), ("solutionName", solutionName));
         return await GetAsync($"/api/roslyn/diagnostics/count{query}", ct);
     }
 
@@ -77,13 +77,14 @@ public class RoslynWebApiClient : IRoslynWebApiClient
         return await GetAsync($"/api/roslyn/references/count{query}", ct);
     }
 
-    public async Task<JsonDocument> SearchSymbolAsync(string symbolName, string? kind = null, string? projectName = null, bool excludeGenerated = true, CancellationToken ct = default)
+    public async Task<JsonDocument> SearchSymbolAsync(string symbolName, string? kind = null, string? projectName = null, bool excludeGenerated = true, string? solutionName = null, CancellationToken ct = default)
     {
         var query = BuildQuery(
             ("symbolName", symbolName),
             ("kind", kind),
             ("projectName", projectName),
-            ("excludeGenerated", excludeGenerated ? null : "false"));
+            ("excludeGenerated", excludeGenerated ? null : "false"),
+            ("solutionName", solutionName));
         return await GetAsync($"/api/roslyn/symbol/search{query}", ct);
     }
 
@@ -104,14 +105,15 @@ public class RoslynWebApiClient : IRoslynWebApiClient
         return await GetAsync($"/api/roslyn/files{query}", ct);
     }
 
-    public async Task<JsonDocument> GetSolutionOverviewAsync(CancellationToken ct = default)
+    public async Task<JsonDocument> GetSolutionOverviewAsync(string? solutionName = null, CancellationToken ct = default)
     {
-        return await GetAsync("/api/roslyn/solution/overview", ct);
+        var query = BuildQuery(("solutionName", solutionName));
+        return await GetAsync($"/api/roslyn/solution/overview{query}", ct);
     }
 
-    public async Task<JsonDocument> BuildProjectAsync(string projectName, string? configuration = null, CancellationToken ct = default)
+    public async Task<JsonDocument> BuildProjectAsync(string projectName, string? configuration = null, string? solutionName = null, CancellationToken ct = default)
     {
-        var query = BuildQuery(("projectName", projectName), ("configuration", configuration));
+        var query = BuildQuery(("projectName", projectName), ("configuration", configuration), ("solutionName", solutionName));
         return await PostAsync($"/api/roslyn/project/build{query}", null, ct);
     }
 
@@ -169,9 +171,10 @@ public class RoslynWebApiClient : IRoslynWebApiClient
         return await PostAsync($"/api/roslyn/workspace/refresh{query}", null, ct);
     }
 
-    public async Task<JsonDocument> FormatDocumentAsync(string filePath, CancellationToken ct = default)
+    public async Task<JsonDocument> FormatDocumentAsync(string filePath, string? solutionName = null, CancellationToken ct = default)
     {
-        return await PostAsync("/api/roslyn/format", filePath, ct);
+        var query = BuildQuery(("solutionName", solutionName));
+        return await PostAsync($"/api/roslyn/format{query}", filePath, ct);
     }
 
     // Advanced Symbol Operations (via query endpoint)
@@ -397,7 +400,7 @@ public class RoslynWebApiClient : IRoslynWebApiClient
             HttpContent? content = null;
             if (body != null)
             {
-                var json = body is string s ? $"\"{s}\"" : JsonSerializer.Serialize(body);
+                var json = JsonSerializer.Serialize(body);
                 content = new StringContent(json, Encoding.UTF8, "application/json");
             }
 

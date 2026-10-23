@@ -16,7 +16,8 @@ public class RoslynBridgeOptions
     public string WebApiBaseUrl { get; set; } = "http://localhost:5001";
 
     /// <summary>
-    /// Request timeout in seconds
+    /// Request timeout in seconds. Kept above the WebAPI's own per-query limits
+    /// (60s for queries, 11 min for builds/package operations) so those surface first.
     /// </summary>
-    public int TimeoutSeconds { get; set; } = 30;
+    public int TimeoutSeconds { get; set; } = 720;
 }

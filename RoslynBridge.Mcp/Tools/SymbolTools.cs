@@ -77,9 +77,10 @@ public class SymbolTools
         [Description("Optional project name to restrict search scope (e.g., 'OpenNest.Engine')")] string? projectName = null,
         [Description("Exclude results from .Designer.cs and other generated files (default: true)")] bool excludeGenerated = true,
         [Description("Max results to return. 0 = unlimited. Default 50.")] int limit = 50,
+        [Description("Optional solution name to target a specific VS instance")] string? solutionName = null,
         CancellationToken ct = default)
     {
-        var result = await _client.SearchSymbolAsync(symbolName, kind, projectName, excludeGenerated, ct);
+        var result = await _client.SearchSymbolAsync(symbolName, kind, projectName, excludeGenerated, solutionName, ct);
         return ResultLimiter.LimitArrayResult(result, limit);
     }
 

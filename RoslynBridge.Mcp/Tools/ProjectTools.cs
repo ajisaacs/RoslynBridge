@@ -55,9 +55,11 @@ public partial class ProjectTools
     /// </summary>
     [McpServerTool(Name = "get_solution_overview", ReadOnly = true, Idempotent = true, OpenWorld = false)]
     [Description("Get a high-level overview of the solution including project count, file statistics, and overall structure.")]
-    public async Task<string> GetSolutionOverview(CancellationToken ct = default)
+    public async Task<string> GetSolutionOverview(
+        [Description("Optional solution name to target a specific VS instance")] string? solutionName = null,
+        CancellationToken ct = default)
     {
-        var result = await _client.GetSolutionOverviewAsync(ct);
+        var result = await _client.GetSolutionOverviewAsync(solutionName, ct);
         return FormatResult(result);
     }
 
@@ -69,9 +71,10 @@ public partial class ProjectTools
     public async Task<string> BuildProject(
         [Description("Name of the project to build")] string projectName,
         [Description("Optional build configuration: Debug or Release")] string? configuration = null,
+        [Description("Optional solution name to target a specific VS instance")] string? solutionName = null,
         CancellationToken ct = default)
     {
-        var result = await _client.BuildProjectAsync(projectName, configuration, ct);
+        var result = await _client.BuildProjectAsync(projectName, configuration, solutionName, ct);
         return FormatBuildResultCompact(result);
     }
 

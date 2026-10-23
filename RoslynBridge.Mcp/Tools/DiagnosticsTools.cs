@@ -58,9 +58,10 @@ public class DiagnosticsTools
     public async Task<string> GetDiagnosticsCount(
         [Description("Optional file path to filter diagnostics to a specific file")] string? filePath = null,
         [Description("Optional severity filter: error, warning, info, hidden")] string? severity = null,
+        [Description("Optional solution name to target a specific VS instance")] string? solutionName = null,
         CancellationToken ct = default)
     {
-        var result = await _client.GetDiagnosticsCountAsync(filePath, severity, ct);
+        var result = await _client.GetDiagnosticsCountAsync(filePath, severity, solutionName, ct);
         return FormatResult(result);
     }
 
